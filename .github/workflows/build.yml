@@ -25,13 +25,13 @@ jobs:
         flutter-version: '3.24.0'
         channel: 'stable'
 
-    - name: Scaffold Android Project Structure
+    - name: Scaffold Android & Inject Storage Bridge
       run: |
         if [ ! -d "android" ]; then
           echo "Generating Android Project structure..."
           flutter create . --org com.example --project-name dataplus_app
           
-          # ⚡ Kotlin ဗားရှင်းကို 1.9.24 သို့ အလိုအလျောက် မြှင့်တင်ပေးမည့် အဆင့်
+          # Kotlin Version ညှိယူခြင်း
           if [ -f "android/settings.gradle" ]; then
             sed -i -E 's/id "org\.jetbrains\.kotlin\.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' android/settings.gradle
           fi
@@ -39,9 +39,52 @@ jobs:
             sed -i -E 's/ext\.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle
           fi
 
-          # ⚡ Storage Permissions & Local Network (10.10.10.10) ခွင့်ပြုချက်များ ထည့်သွင်းခြင်း
+          # Storage Permissions & Cleartext Traffic ထည့်သွင်းခြင်း
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
+
+          # ⚡ ဖုန်း STORAGE တိုင်းပေးမည့် Kotlin Native Bridge ထည့်သွင်းခြင်း
+          mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
+          cat << 'EOF' > android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
+package com.example.dataplus_app
+
+import android.os.Environment
+import android.os.StatFs
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+
+class MainActivity: FlutterActivity() {
+    private val CHANNEL = "com.dataplus/storage"
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+            if (call.method == "getStorageSpace") {
+                try {
+                    val path = Environment.getExternalStorageDirectory()
+                    val stat = StatFs(path.path)
+                    val blockSize = stat.blockSizeLong
+                    val totalBlocks = stat.blockCountLong
+                    val availableBlocks = stat.availableBlocksLong
+
+                    val totalBytes = totalBlocks * blockSize
+                    val freeBytes = availableBlocks * blockSize
+
+                    val map = HashMap<String, Long>()
+                    map["total"] = totalBytes
+                    map["free"] = freeBytes
+                    result.success(map)
+                } catch (e: Exception) {
+                    result.error("ERROR", e.message, null)
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
+    }
+}
+EOF
         fi
 
     - name: Install Dependencies
