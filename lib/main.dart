@@ -52,7 +52,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         unselectedItemColor: const Color(0xFF8B949E),
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.movie_creation_outlined), label: 'Web Portal'),
+          BottomNavigationBarItem(icon: Icon(Icons.movie_creation_outlined), label: 'DATA PLUS'),
           BottomNavigationBarItem(icon: Icon(Icons.download_rounded), label: 'Downloader'),
         ],
       ),
