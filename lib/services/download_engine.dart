@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 class DownloadItem {
   final String url;
   final String name;
-  String status;
+  String status; // 'queued', 'downloading', 'paused', 'finished', 'error'
   double progress;
   int sizeBytes;
   String speed;
@@ -39,6 +39,9 @@ class DownloadEngine extends ChangeNotifier {
   static const String downloadPath = '/storage/emulated/0/Download/DataPlus';
   final List<DownloadItem> downloads = [];
   bool isDownloading = false;
+
+  // 🔔 ဒေါင်းလုဒ်အားလုံး ပြီးဆုံးသွားပါက Finished tab သို့ ကူးရန် Callback
+  VoidCallback? onAllDownloadsFinished;
 
   int freeStorageBytes = 0;
   int totalStorageBytes = 0;
@@ -77,8 +80,20 @@ class DownloadEngine extends ChangeNotifier {
     for (var u in urls) {
       final cleanUrl = u.trim();
       if (cleanUrl.startsWith('http') && !downloads.any((d) => d.url == cleanUrl)) {
-        String filename = Uri.decodeComponent(cleanUrl.split('/').last.split('?').first);
-        if (filename.isEmpty) filename = "file_${DateTime.now().millisecondsSinceEpoch}.mp4";
+        String filename = '';
+        final uri = Uri.parse(cleanUrl);
+
+        // 🚀 APK ဒေါင်းလုဒ် URL ဖြစ်ပါက အမည်တိကျစွာ ခွဲပေးခြင်း
+        if (uri.path.contains('/api/download/apk')) {
+          final appName = uri.queryParameters['app'] ?? 'dataplus';
+          filename = "$appName.apk";
+        } else {
+          filename = Uri.decodeComponent(cleanUrl.split('/').last.split('?').first);
+        }
+
+        if (filename.isEmpty || filename == 'apk') {
+          filename = "file_${DateTime.now().millisecondsSinceEpoch}.mp4";
+        }
 
         downloads.add(DownloadItem(
           url: cleanUrl,
@@ -182,7 +197,7 @@ class DownloadEngine extends ChangeNotifier {
       notifyListeners();
 
       try {
-        await _downloadDirectSeek4(item);
+        await _downloadDirectSeek8(item);
         if (!item.isPaused && !item.isCanceled) {
           item.status = 'finished';
           item.progress = 1.0;
@@ -195,9 +210,15 @@ class DownloadEngine extends ChangeNotifier {
       notifyListeners();
     }
     isDownloading = false;
+
+    // 🚀 Queue ထဲရှိ ဖိုင်အားလုံး ပြီးဆုံးသွားပါက Finished မျက်နှာပြင်ဆီ အလိုအလျောက် ကူးပြောင်းပေးခြင်း
+    if (!downloads.any((d) => d.status != 'finished')) {
+      onAllDownloadsFinished?.call();
+    }
   }
 
-  Future<void> _downloadDirectSeek4(DownloadItem item) async {
+  // 🚀 အမြင့်ဆုံး Speed ရရှိရန် 8-Thread Direct-Seek Engine
+  Future<void> _downloadDirectSeek8(DownloadItem item) async {
     final client = HttpClient();
     final headReq = await client.headUrl(Uri.parse(item.url));
     final headResp = await headReq.close();
@@ -207,13 +228,14 @@ class DownloadEngine extends ChangeNotifier {
     final tempFile = File('$downloadPath/${item.name}.tmp');
     final finalFile = File('$downloadPath/${item.name}');
 
+    // Multi-thread နေရာချထားရန် ဖိုင်အရွယ်အစားကို ကြိုတင်ဖန်တီးခြင်း
     if (!tempFile.existsSync() || tempFile.lengthSync() != totalLen) {
       final raf = await tempFile.open(mode: FileMode.write);
       await raf.truncate(totalLen);
       await raf.close();
     }
 
-    const numThreads = 4;
+    const numThreads = 8; // 8-Thread သို့ တိုးမြှင့်ထားပါသည်
     final partSize = totalLen ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
       final s = i * partSize;
@@ -245,7 +267,7 @@ class DownloadEngine extends ChangeNotifier {
 
     final futures = parts.map((p) => downloadPart(p)).toList();
 
-    final timer = Timer.periodic(const Duration(milliseconds: 700), (_) {
+    final timer = Timer.periodic(const Duration(milliseconds: 600), (_) {
       final currentBytes = bytesDownloaded.reduce((a, b) => a + b);
       final now = DateTime.now().millisecondsSinceEpoch;
       final dt = (now - lastTime) / 1000.0;
@@ -272,7 +294,7 @@ class DownloadEngine extends ChangeNotifier {
 
     if (tempFile.existsSync() && tempFile.lengthSync() == totalLen) {
       if (finalFile.existsSync()) finalFile.deleteSync();
-      await tempFile.rename(finalFile.path);
+      await tempFile.rename(finalFile.path); // 0.001s Instant Complete
     }
   }
 }
