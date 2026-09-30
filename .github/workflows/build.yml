@@ -65,7 +65,6 @@ jobs:
         mv android/build.gradle.tmp android/build.gradle
         rm -f android/build.gradle.prefix
 
-        # 1. filepaths.xml ဖန်တီးခြင်း
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
           '<?xml version="1.0" encoding="utf-8"?>' \
@@ -75,14 +74,11 @@ jobs:
           '    <root-path name="root" path="." />' \
           '</paths>' > android/app/src/main/res/xml/filepaths.xml
 
-        # 2. Permissions ထည့်သွင်းခြင်း
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
 
-        # 3. FileProvider ထည့်သွင်းခြင်း
         sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
 
-        # 4. Storage တိုင်းပေးမည့် Kotlin Native Bridge ထည့်သွင်းခြင်း
         mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
         printf '%s\n' \
           'package com.example.dataplus_app' \
@@ -121,6 +117,18 @@ jobs:
 
     - name: Install Dependencies
       run: flutter pub get
+
+    # ⚡ icon.png ကို assets ထဲ အလိုအလျောက် ရွှေ့ပြီး App Launcher Icon အဖြစ် ပြောင်းလဲပေးမည့်အဆင့်
+    - name: Generate App Launcher Icons
+      run: |
+        mkdir -p assets
+        if [ -f "icon.png" ]; then
+          cp icon.png assets/icon.png
+        fi
+        if [ -f "assets/icon.png" ]; then
+          echo "Generating Custom App Icons..."
+          dart run flutter_launcher_icons
+        fi
 
     - name: Build APK (Release)
       run: flutter build apk --release
