@@ -18,7 +18,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   @override
   void initState() {
     super.initState();
-    // ဒေါင်းလုဒ် ပြီးဆုံးသွားပါက Finished tab သို့ အလိုအလျောက် ကူးပြောင်းပေးခြင်း
     engine.onAllDownloadsFinished = () {
       if (mounted) {
         setState(() {
@@ -35,25 +34,34 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // 🚀 ဒေါင်းပြီးသားဖိုင်များကို နှိပ်၍ ဖွင့်ခြင်း (APK ဆို Install၊ Movie ဆို Player)
+  // 🚀 ဖိုင်ကို အတိအကျ ဖွင့်ပေးမည့် Function
   Future<void> _openDownloadedFile(String fileName) async {
     final fullPath = '${DownloadEngine.downloadPath}/$fileName';
     final file = File(fullPath);
-    if (await file.exists()) {
-      final result = await OpenFilex.open(fullPath);
-      if (result.type != ResultType.done) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('⚠️ ဖိုင်ဖွင့်မရပါ: ${result.message}')),
-          );
-        }
-      }
-    } else {
+    if (!await file.exists()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ ဖိုင်မတွေ့ရှိပါ (ဖျက်လိုက်ပါပြီလား)')),
+          const SnackBar(content: Text('⚠️ ဖိုင်မတွေ့ရှိပါ')),
         );
       }
+      return;
+    }
+
+    String? type;
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.apk')) {
+      type = 'application/vnd.android.package-archive';
+    } else if (lower.endsWith('.mp4')) {
+      type = 'video/mp4';
+    } else if (lower.endsWith('.mkv')) {
+      type = 'video/*';
+    }
+
+    final result = await OpenFilex.open(fullPath, type: type);
+    if (result.type != ResultType.done && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('⚠️ ${result.message}')),
+      );
     }
   }
 
@@ -292,7 +300,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             final isApk = item.name.toLowerCase().endsWith('.apk');
 
                             return InkWell(
-                              // 🚀 ဖိုင်ဒေါင်းပြီးသားဖြစ်ပါက တစ်ချက်နှိပ်ရုံဖြင့် တိုက်ရိုက်ဖွင့်ကြည့်နိုင်ခြင်း
                               onTap: isDone ? () => _openDownloadedFile(item.name) : null,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -327,7 +334,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                         Expanded(
                                           child: Text(item.name, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13)),
                                         ),
-                                        // 🚀 Finished ဖိုင်များအတွက် အက်ပ်သွင်းရန် / ဖွင့်ရန် ခလုတ်
                                         if (isDone)
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
