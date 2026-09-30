@@ -13,18 +13,28 @@ class DownloaderScreen extends StatefulWidget {
 
 class _DownloaderScreenState extends State<DownloaderScreen> {
   final engine = DownloadEngine();
-  String currentTab = 'Finished';
+  late String currentTab;
 
   @override
   void initState() {
     super.initState();
-    engine.onAllDownloadsFinished = () {
-      if (mounted) {
-        setState(() {
-          currentTab = 'Finished';
-        });
-      }
-    };
+    // 🚀 စတင်ချိန်တွင် Engine ၏ activeTab အတိုင်း (Queue) ကို တန်းဖွင့်ပေးခြင်း
+    currentTab = engine.activeTab.value;
+    engine.activeTab.addListener(_handleTabChange);
+  }
+
+  void _handleTabChange() {
+    if (mounted) {
+      setState(() {
+        currentTab = engine.activeTab.value;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    engine.activeTab.removeListener(_handleTabChange);
+    super.dispose();
   }
 
   String _formatBytes(int bytes) {
@@ -34,7 +44,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // 🚀 ဖိုင်ကို အတိအကျ ဖွင့်ပေးမည့် Function
   Future<void> _openDownloadedFile(String fileName) async {
     final fullPath = '${DownloadEngine.downloadPath}/$fileName';
     final file = File(fullPath);
@@ -125,7 +134,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
               Navigator.pop(ctx);
               if (urls.isNotEmpty) {
                 engine.addUrls(urls);
-                setState(() => currentTab = 'Queue');
               }
             },
             child: const Text("🚀 စတင်ဒေါင်းမည်", style: TextStyle(color: Colors.white)),
