@@ -25,7 +25,7 @@ jobs:
         flutter-version: '3.24.0'
         channel: 'stable'
 
-    - name: Configure Android Project & Force Kotlin 1.9.24
+    - name: Configure Android Project & Inject FileProvider
       run: |
         if [ ! -d "android" ]; then
           echo "Generating Android Project structure..."
@@ -65,9 +65,24 @@ jobs:
         mv android/build.gradle.tmp android/build.gradle
         rm -f android/build.gradle.prefix
 
+        # 1. filepaths.xml ဖန်တီးခြင်း
+        mkdir -p android/app/src/main/res/xml
+        printf '%s\n' \
+          '<?xml version="1.0" encoding="utf-8"?>' \
+          '<paths xmlns:android="http://schemas.android.com/apk/res/android">' \
+          '    <external-path name="external_files" path="." />' \
+          '    <external-storage-path name="external_storage" path="." />' \
+          '    <root-path name="root" path="." />' \
+          '</paths>' > android/app/src/main/res/xml/filepaths.xml
+
+        # 2. Permissions ထည့်သွင်းခြင်း
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
 
+        # 3. FileProvider ထည့်သွင်းခြင်း
+        sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
+
+        # 4. Storage တိုင်းပေးမည့် Kotlin Native Bridge ထည့်သွင်းခြင်း
         mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
         printf '%s\n' \
           'package com.example.dataplus_app' \
