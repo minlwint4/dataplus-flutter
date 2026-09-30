@@ -23,6 +23,20 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (request) async {
+            // 🚀 ၁။ HOME စာမျက်နှာရှိ "app သွင်းမည်" / "downloader သွင်းမည်" ခလုတ်များကို ဖမ်းယူခြင်း
+            if (request.url.contains('/api/download/apk') || request.url.endsWith('.apk')) {
+              DownloadEngine().addUrls([request.url]);
+              widget.onTabChangeRequested(1); // Downloader Tab သို့ တန်းကူးမည်
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('📥 APK ကို ဒေါင်းလုဒ် စတင်နေပါသည်...'),
+                  backgroundColor: Color(0xFF238636),
+                ),
+              );
+              return NavigationDecision.prevent;
+            }
+
+            // 🚀 ၂။ download.html ထဲက 'dataplus://open' ခလုတ်ကို ဖမ်းယူခြင်း
             if (request.url.startsWith('dataplus://')) {
               try {
                 final dynamic result = await _controller.runJavaScriptReturningResult(
@@ -43,6 +57,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               return NavigationDecision.prevent;
             }
 
+            // 🚀 ၃။ တစ်ကားချင်း Download ခလုတ် နှိပ်လျှင်လည်း ဖမ်းယူခြင်း
             if (request.url.contains('/api/download/file/')) {
               DownloadEngine().addUrls([request.url]);
               ScaffoldMessenger.of(context).showSnackBar(
