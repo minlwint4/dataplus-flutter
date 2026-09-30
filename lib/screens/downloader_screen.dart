@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:open_filex/open_filex.dart';
 import '../services/download_engine.dart';
 
 class DownloaderScreen extends StatefulWidget {
@@ -13,11 +15,46 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   final engine = DownloadEngine();
   String currentTab = 'Finished';
 
+  @override
+  void initState() {
+    super.initState();
+    // ဒေါင်းလုဒ် ပြီးဆုံးသွားပါက Finished tab သို့ အလိုအလျောက် ကူးပြောင်းပေးခြင်း
+    engine.onAllDownloadsFinished = () {
+      if (mounted) {
+        setState(() {
+          currentTab = 'Finished';
+        });
+      }
+    };
+  }
+
   String _formatBytes(int bytes) {
     if (bytes <= 0) return "0 MB";
     double mb = bytes / (1024 * 1024);
     if (mb >= 1024) return "${(mb / 1024).toStringAsFixed(1)} GB";
     return "${mb.toStringAsFixed(1)} MB";
+  }
+
+  // 🚀 ဒေါင်းပြီးသားဖိုင်များကို နှိပ်၍ ဖွင့်ခြင်း (APK ဆို Install၊ Movie ဆို Player)
+  Future<void> _openDownloadedFile(String fileName) async {
+    final fullPath = '${DownloadEngine.downloadPath}/$fileName';
+    final file = File(fullPath);
+    if (await file.exists()) {
+      final result = await OpenFilex.open(fullPath);
+      if (result.type != ResultType.done) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('⚠️ ဖိုင်ဖွင့်မရပါ: ${result.message}')),
+          );
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ ဖိုင်မတွေ့ရှိပါ (ဖျက်လိုက်ပါပြီလား)')),
+        );
+      }
+    }
   }
 
   void _showAddLinksDialog() {
@@ -110,6 +147,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
+                // 🔝 Top Bar
                 Container(
                   color: const Color(0xFF1E232B),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -154,6 +192,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     ],
                   ),
                 ),
+
+                // 💾 ဖုန်း STORAGE လက်ကျန် Card
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   padding: const EdgeInsets.all(12),
@@ -237,6 +277,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     ],
                   ),
                 ),
+
+                // 📋 List View
                 Expanded(
                   child: currentList.isEmpty
                       ? Center(child: Text("No $currentTab downloads", style: const TextStyle(color: Color(0xFF484F58))))
@@ -247,72 +289,92 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             final isDone = item.status == 'finished';
                             final isDl = item.status == 'downloading';
                             final isPaused = item.status == 'paused';
+                            final isApk = item.name.toLowerCase().endsWith('.apk');
 
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF13171D),
-                                border: Border(bottom: BorderSide(color: Color(0xFF21262E), width: 0.6)),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      Checkbox(
-                                        value: item.isSelected,
-                                        activeColor: const Color(0xFF2563EB),
-                                        onChanged: (v) => setState(() => item.isSelected = v ?? false),
-                                      ),
-                                      if (isDone)
-                                        const Icon(Icons.check_circle, color: Color(0xFF00E676), size: 20)
-                                      else if (isDl)
-                                        IconButton(
-                                          icon: const Icon(Icons.pause_circle_filled, color: Color(0xFFE3B341), size: 22),
-                                          onPressed: () => engine.togglePauseResume(item),
-                                        )
-                                      else if (isPaused)
-                                        IconButton(
-                                          icon: const Icon(Icons.play_circle_fill, color: Color(0xFF58A6FF), size: 22),
-                                          onPressed: () => engine.togglePauseResume(item),
-                                        )
-                                      else
-                                        const Icon(Icons.access_time, color: Color(0xFF8B949E), size: 20),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(item.name, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline, color: Color(0xFF8B949E), size: 18),
-                                        onPressed: () => engine.deleteItem(item),
-                                      )
-                                    ],
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            return InkWell(
+                              // 🚀 ဖိုင်ဒေါင်းပြီးသားဖြစ်ပါက တစ်ချက်နှိပ်ရုံဖြင့် တိုက်ရိုက်ဖွင့်ကြည့်နိုင်ခြင်း
+                              onTap: isDone ? () => _openDownloadedFile(item.name) : null,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF13171D),
+                                  border: Border(bottom: BorderSide(color: Color(0xFF21262E), width: 0.6)),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
                                       children: [
-                                        Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                                        Text("${item.speed}  •  ${item.eta}", style: TextStyle(color: isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
-                                        Text(item.date, style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5)),
+                                        Checkbox(
+                                          value: item.isSelected,
+                                          activeColor: const Color(0xFF2563EB),
+                                          onChanged: (v) => setState(() => item.isSelected = v ?? false),
+                                        ),
+                                        if (isDone)
+                                          Icon(isApk ? Icons.android : Icons.check_circle, color: const Color(0xFF00E676), size: 22)
+                                        else if (isDl)
+                                          IconButton(
+                                            icon: const Icon(Icons.pause_circle_filled, color: Color(0xFFE3B341), size: 22),
+                                            onPressed: () => engine.togglePauseResume(item),
+                                          )
+                                        else if (isPaused)
+                                          IconButton(
+                                            icon: const Icon(Icons.play_circle_fill, color: Color(0xFF58A6FF), size: 22),
+                                            onPressed: () => engine.togglePauseResume(item),
+                                          )
+                                        else
+                                          const Icon(Icons.access_time, color: Color(0xFF8B949E), size: 20),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(item.name, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                        ),
+                                        // 🚀 Finished ဖိုင်များအတွက် အက်ပ်သွင်းရန် / ဖွင့်ရန် ခလုတ်
+                                        if (isDone)
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: isApk ? const Color(0xFF1E40AF) : const Color(0xFF047857),
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                            onPressed: () => _openDownloadedFile(item.name),
+                                            icon: Icon(isApk ? Icons.system_update : Icons.play_arrow, size: 14, color: Colors.white),
+                                            label: Text(isApk ? "သွင်းမည်" : "ဖွင့်မည်", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                          ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, color: Color(0xFF8B949E), size: 18),
+                                          onPressed: () => engine.deleteItem(item),
+                                        )
                                       ],
                                     ),
-                                  ),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(3),
-                                    child: LinearProgressIndicator(
-                                      value: item.progress,
-                                      backgroundColor: const Color(0xFF21262E),
-                                      color: isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676),
-                                      minHeight: 6,
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                          Text("${item.speed}  •  ${item.eta}", style: TextStyle(color: isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
+                                          Text(item.date, style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5)),
+                                        ],
+                                      ),
                                     ),
-                                  )
-                                ],
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(3),
+                                      child: LinearProgressIndicator(
+                                        value: item.progress,
+                                        backgroundColor: const Color(0xFF21262E),
+                                        color: isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676),
+                                        minHeight: 6,
+                                      ),
+                                    )
+                                  ],
+                                ),
                               ),
                             );
                           },
                         ),
                 ),
+
+                // 🔻 ADM Bottom Bar
                 Container(
                   color: const Color(0xFF1E232B),
                   padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 15),
