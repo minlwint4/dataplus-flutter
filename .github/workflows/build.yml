@@ -25,55 +25,88 @@ jobs:
         flutter-version: '3.24.0'
         channel: 'stable'
 
-    - name: Scaffold Android & Inject Storage Bridge
+    - name: Configure Android Project & Force Kotlin 1.9.24
       run: |
         if [ ! -d "android" ]; then
           echo "Generating Android Project structure..."
           flutter create . --org com.example --project-name dataplus_app
-          
-          if [ -f "android/settings.gradle" ]; then
-            sed -i -E 's/id "org\.jetbrains\.kotlin\.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' android/settings.gradle
-          fi
-          if [ -f "android/build.gradle" ]; then
-            sed -i -E 's/ext\.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle
-          fi
-
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
-
-          mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
-          echo 'package com.example.dataplus_app' > android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo 'import android.os.Environment' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo 'import android.os.StatFs' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo 'import io.flutter.embedding.android.FlutterActivity' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo 'import io.flutter.embedding.engine.FlutterEngine' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo 'import io.flutter.plugin.common.MethodChannel' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo 'class MainActivity: FlutterActivity() {' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '    private val CHANNEL = "com.dataplus/storage"' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '        super.configureFlutterEngine(flutterEngine)' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '            if (call.method == "getStorageSpace") {' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                try {' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    val path = Environment.getExternalStorageDirectory()' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    val stat = StatFs(path.path)' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    val blockSize = stat.blockSizeLong' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    val totalBlocks = stat.blockCountLong' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    val availableBlocks = stat.availableBlocksLong' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    val map = HashMap<String, Long>()' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    map["total"] = totalBlocks * blockSize' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    map["free"] = availableBlocks * blockSize' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    result.success(map)' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                } catch (e: Exception) {' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                    result.error("ERROR", e.message, null)' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                }' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '            } else {' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '                result.notImplemented()' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '            }' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '        }' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '    }' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
-          echo '}' >> android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
         fi
+
+        # 1. settings.gradle ထဲရှိ Kotlin plugin ကို 1.9.24 သို့ မြှင့်တင်ခြင်း
+        if [ -f "android/settings.gradle" ]; then
+          sed -i -E 's/id "org\.jetbrains\.kotlin\.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' android/settings.gradle
+        fi
+
+        # 2. build.gradle ၏ ထိပ်ဆုံးတွင် Kotlin 1.9.24 Buildscript နှင့် Resolution Strategy ထည့်သွင်းခြင်း
+        printf '%s\n' \
+          'buildscript {' \
+          '    ext.kotlin_version = "1.9.24"' \
+          '    repositories {' \
+          '        google()' \
+          '        mavenCentral()' \
+          '    }' \
+          '    dependencies {' \
+          '        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24"' \
+          '    }' \
+          '}' \
+          'allprojects {' \
+          '    repositories {' \
+          '        google()' \
+          '        mavenCentral()' \
+          '    }' \
+          '    configurations.all {' \
+          '        resolutionStrategy.eachDependency { details ->' \
+          '            if (details.requested.group == "org.jetbrains.kotlin") {' \
+          '                details.useVersion "1.9.24"' \
+          '            }' \
+          '        }' \
+          '    }' \
+          '}' > android/build.gradle.prefix
+
+        cat android/build.gradle.prefix android/build.gradle > android/build.gradle.tmp
+        mv android/build.gradle.tmp android/build.gradle
+        rm -f android/build.gradle.prefix
+
+        # 3. AndroidManifest.xml ထဲတွင် Storage & Network Permissions ထည့်သွင်းခြင်း
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
+        sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
+
+        # 4. Storage တိုင်းပေးမည့် Native Kotlin Bridge ဖိုင် ထည့်သွင်းခြင်း
+        mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
+        printf '%s\n' \
+          'package com.example.dataplus_app' \
+          '' \
+          'import android.os.Environment' \
+          'import android.os.StatFs' \
+          'import io.flutter.embedding.android.FlutterActivity' \
+          'import io.flutter.embedding.engine.FlutterEngine' \
+          'import io.flutter.plugin.common.MethodChannel' \
+          '' \
+          'class MainActivity: FlutterActivity() {' \
+          '    private val CHANNEL = "com.dataplus/storage"' \
+          '    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {' \
+          '        super.configureFlutterEngine(flutterEngine)' \
+          '        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->' \
+          '            if (call.method == "getStorageSpace") {' \
+          '                try {' \
+          '                    val path = Environment.getExternalStorageDirectory()' \
+          '                    val stat = StatFs(path.path)' \
+          '                    val blockSize = stat.blockSizeLong' \
+          '                    val totalBlocks = stat.blockCountLong' \
+          '                    val availableBlocks = stat.availableBlocksLong' \
+          '                    val map = HashMap<String, Long>()' \
+          '                    map["total"] = totalBlocks * blockSize' \
+          '                    map["free"] = availableBlocks * blockSize' \
+          '                    result.success(map)' \
+          '                } catch (e: Exception) {' \
+          '                    result.error("ERROR", e.message, null)' \
+          '                }' \
+          '            } else {' \
+          '                result.notImplemented()' \
+          '            }' \
+          '        }' \
+          '    }' \
+          '}' > android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
 
     - name: Install Dependencies
       run: flutter pub get
