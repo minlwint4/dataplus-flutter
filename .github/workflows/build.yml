@@ -32,12 +32,10 @@ jobs:
           flutter create . --org com.example --project-name dataplus_app
         fi
 
-        # 1. settings.gradle ထဲရှိ Kotlin plugin ကို 1.9.24 သို့ မြှင့်တင်ခြင်း
         if [ -f "android/settings.gradle" ]; then
           sed -i -E 's/id "org\.jetbrains\.kotlin\.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' android/settings.gradle
         fi
 
-        # 2. build.gradle ၏ ထိပ်ဆုံးတွင် Kotlin 1.9.24 Buildscript နှင့် Resolution Strategy ထည့်သွင်းခြင်း
         printf '%s\n' \
           'buildscript {' \
           '    ext.kotlin_version = "1.9.24"' \
@@ -67,11 +65,9 @@ jobs:
         mv android/build.gradle.tmp android/build.gradle
         rm -f android/build.gradle.prefix
 
-        # 3. AndroidManifest.xml ထဲတွင် Storage & Network Permissions ထည့်သွင်းခြင်း
-        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
 
-        # 4. Storage တိုင်းပေးမည့် Native Kotlin Bridge ဖိုင် ထည့်သွင်းခြင်း
         mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
         printf '%s\n' \
           'package com.example.dataplus_app' \
