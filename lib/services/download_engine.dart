@@ -40,7 +40,6 @@ class DownloadEngine extends ChangeNotifier {
   final List<DownloadItem> downloads = [];
   bool isDownloading = false;
 
-  // 🔔 ဒေါင်းလုဒ်အားလုံး ပြီးဆုံးသွားပါက Finished tab သို့ ကူးရန် Callback
   VoidCallback? onAllDownloadsFinished;
 
   int freeStorageBytes = 0;
@@ -83,7 +82,6 @@ class DownloadEngine extends ChangeNotifier {
         String filename = '';
         final uri = Uri.parse(cleanUrl);
 
-        // 🚀 APK ဒေါင်းလုဒ် URL ဖြစ်ပါက အမည်တိကျစွာ ခွဲပေးခြင်း
         if (uri.path.contains('/api/download/apk')) {
           final appName = uri.queryParameters['app'] ?? 'dataplus';
           filename = "$appName.apk";
@@ -197,7 +195,7 @@ class DownloadEngine extends ChangeNotifier {
       notifyListeners();
 
       try {
-        await _downloadDirectSeek8(item);
+        await _downloadFile(item);
         if (!item.isPaused && !item.isCanceled) {
           item.status = 'finished';
           item.progress = 1.0;
@@ -205,96 +203,107 @@ class DownloadEngine extends ChangeNotifier {
           updateStorageInfo();
         }
       } catch (e) {
-        if (!item.isPaused && !item.isCanceled) item.status = 'error';
+        if (!item.isPaused && !item.isCanceled) {
+          item.status = 'error';
+          item.speed = 'Error';
+        }
       }
       notifyListeners();
     }
     isDownloading = false;
 
-    // 🚀 Queue ထဲရှိ ဖိုင်အားလုံး ပြီးဆုံးသွားပါက Finished မျက်နှာပြင်ဆီ အလိုအလျောက် ကူးပြောင်းပေးခြင်း
     if (!downloads.any((d) => d.status != 'finished')) {
       onAllDownloadsFinished?.call();
     }
   }
 
-  // 🚀 အမြင့်ဆုံး Speed ရရှိရန် 8-Thread Direct-Seek Engine
-  Future<void> _downloadDirectSeek8(DownloadItem item) async {
-    final client = HttpClient();
-    final headReq = await client.headUrl(Uri.parse(item.url));
-    final headResp = await headReq.close();
-    final totalLen = headResp.contentLength;
-    if (totalLen > 0) item.sizeBytes = totalLen;
-
+  // 🚀 LAN Speed အပြည့်ဖြင့် ဖိုင်မပျက်စီးအောင် တိုက်ရိုက်ဆွဲယူမည့် စနစ်
+  Future<void> _downloadFile(DownloadItem item) async {
     final tempFile = File('$downloadPath/${item.name}.tmp');
     final finalFile = File('$downloadPath/${item.name}');
 
-    // Multi-thread နေရာချထားရန် ဖိုင်အရွယ်အစားကို ကြိုတင်ဖန်တီးခြင်း
-    if (!tempFile.existsSync() || tempFile.lengthSync() != totalLen) {
-      final raf = await tempFile.open(mode: FileMode.write);
-      await raf.truncate(totalLen);
-      await raf.close();
+    final client = HttpClient();
+    final req = await client.getUrl(Uri.parse(item.url));
+
+    int existingBytes = 0;
+    if (tempFile.existsSync()) {
+      existingBytes = tempFile.lengthSync();
+      if (existingBytes > 0) {
+        req.headers.add(HttpHeaders.rangeHeader, 'bytes=$existingBytes-');
+      }
     }
 
-    const numThreads = 8; // 8-Thread သို့ တိုးမြှင့်ထားပါသည်
-    final partSize = totalLen ~/ numThreads;
-    final parts = List.generate(numThreads, (i) {
-      final s = i * partSize;
-      final e = (i == numThreads - 1) ? (totalLen - 1) : (s + partSize - 1);
-      return {'idx': i, 'start': s, 'end': e};
-    });
+    final resp = await req.close();
 
-    List<int> bytesDownloaded = List.filled(numThreads, 0);
-    int lastDownloaded = 0;
+    FileMode mode = FileMode.write;
+    int downloadedBytes = 0;
+
+    if (resp.statusCode == HttpStatus.partialContent) {
+      mode = FileMode.append;
+      downloadedBytes = existingBytes;
+    } else if (resp.statusCode == HttpStatus.ok) {
+      mode = FileMode.write;
+      downloadedBytes = 0;
+      if (resp.contentLength > 0) {
+        item.sizeBytes = resp.contentLength;
+      }
+    } else {
+      throw HttpException('Server status: ${resp.statusCode}');
+    }
+
+    if (resp.headers.value(HttpHeaders.contentRangeHeader) != null) {
+      final cr = resp.headers.value(HttpHeaders.contentRangeHeader)!;
+      final totalStr = cr.split('/').last;
+      final parsed = int.tryParse(totalStr);
+      if (parsed != null && parsed > 0) item.sizeBytes = parsed;
+    } else if (item.sizeBytes == 0 && resp.contentLength > 0) {
+      item.sizeBytes = downloadedBytes + resp.contentLength;
+    }
+
+    final totalLen = item.sizeBytes;
+    final sink = tempFile.openWrite(mode: mode);
+
+    int lastDownloaded = downloadedBytes;
     int lastTime = DateTime.now().millisecondsSinceEpoch;
 
-    Future<void> downloadPart(Map p) async {
-      final pClient = HttpClient();
-      final req = await pClient.getUrl(Uri.parse(item.url));
-      req.headers.add(HttpHeaders.rangeHeader, 'bytes=${p['start']}-${p['end']}');
-      final resp = await req.close();
-
-      final raf = await tempFile.open(mode: FileMode.writeOnly);
-      await raf.setPosition(p['start']);
-
-      await for (var chunk in resp) {
-        if (item.isPaused || item.isCanceled) break;
-        await raf.writeFrom(chunk);
-        bytesDownloaded[p['idx']] += chunk.length;
-      }
-      await raf.close();
-      pClient.close();
-    }
-
-    final futures = parts.map((p) => downloadPart(p)).toList();
-
     final timer = Timer.periodic(const Duration(milliseconds: 600), (_) {
-      final currentBytes = bytesDownloaded.reduce((a, b) => a + b);
       final now = DateTime.now().millisecondsSinceEpoch;
       final dt = (now - lastTime) / 1000.0;
       if (dt > 0) {
-        final speedBytes = (currentBytes - lastDownloaded) / dt;
+        final speedBytes = (downloadedBytes - lastDownloaded) / dt;
         final speedMb = speedBytes / (1024 * 1024);
         item.speed = "${speedMb.toStringAsFixed(1)} MB/s";
-        item.progress = totalLen > 0 ? (currentBytes / totalLen).clamp(0.0, 0.99) : 0.0;
-
-        if (speedBytes > 0 && totalLen > 0) {
-          final remSec = ((totalLen - currentBytes) / speedBytes).round();
-          item.eta = "${remSec ~/ 60}:${(remSec % 60).toString().padLeft(2, '0')}";
+        if (totalLen > 0) {
+          item.progress = (downloadedBytes / totalLen).clamp(0.0, 0.99);
+          if (speedBytes > 0) {
+            final remSec = ((totalLen - downloadedBytes) / speedBytes).round();
+            item.eta = "${remSec ~/ 60}:${(remSec % 60).toString().padLeft(2, '0')}";
+          }
         }
-        lastDownloaded = currentBytes;
+        lastDownloaded = downloadedBytes;
         lastTime = now;
         notifyListeners();
       }
     });
 
-    await Future.wait(futures);
-    timer.cancel();
+    try {
+      await for (var chunk in resp) {
+        if (item.isPaused || item.isCanceled) break;
+        sink.add(chunk);
+        downloadedBytes += chunk.length;
+      }
+      await sink.flush();
+    } finally {
+      timer.cancel();
+      await sink.close();
+      client.close();
+    }
 
     if (item.isCanceled || item.isPaused) return;
 
-    if (tempFile.existsSync() && tempFile.lengthSync() == totalLen) {
+    if (tempFile.existsSync()) {
       if (finalFile.existsSync()) finalFile.deleteSync();
-      await tempFile.rename(finalFile.path); // 0.001s Instant Complete
+      await tempFile.rename(finalFile.path); // နာမည်အမှန်သို့ ပြောင်းလဲခြင်း
     }
   }
 }
