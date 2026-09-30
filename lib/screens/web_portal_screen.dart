@@ -23,16 +23,10 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (request) async {
-            // 🚀 ၁။ HOME စာမျက်နှာရှိ "app သွင်းမည်" / "downloader သွင်းမည်" ခလုတ်များကို ဖမ်းယူခြင်း
+            // 🚀 ၁။ APK ဒေါင်းလုဒ် ခလုတ်များကို ဖမ်းယူပြီး Downloader သို့ တန်းကူးခြင်း
             if (request.url.contains('/api/download/apk') || request.url.endsWith('.apk')) {
               DownloadEngine().addUrls([request.url]);
-              widget.onTabChangeRequested(1); // Downloader Tab သို့ တန်းကူးမည်
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('📥 APK ကို ဒေါင်းလုဒ် စတင်နေပါသည်...'),
-                  backgroundColor: Color(0xFF238636),
-                ),
-              );
+              widget.onTabChangeRequested(1); // Downloader (Queue) သို့ တန်းကူးမည်
               return NavigationDecision.prevent;
             }
 
@@ -51,18 +45,16 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
                 if (urls.isNotEmpty) {
                   DownloadEngine().addUrls(urls);
-                  widget.onTabChangeRequested(1);
+                  widget.onTabChangeRequested(1); // Downloader (Queue) သို့ တန်းကူးမည်
                 }
               } catch (_) {}
               return NavigationDecision.prevent;
             }
 
-            // 🚀 ၃။ တစ်ကားချင်း Download ခလုတ် နှိပ်လျှင်လည်း ဖမ်းယူခြင်း
+            // 🚀 ၃။ တစ်ကားချင်း Download ခလုတ်နှိပ်လျှင်လည်း Queue ဆီ တန်းကူးမည်
             if (request.url.contains('/api/download/file/')) {
               DownloadEngine().addUrls([request.url]);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('✅ ဒေါင်းလုဒ် Queue ထဲသို့ ထည့်ပြီးပါပြီ'), backgroundColor: Color(0xFF238636))
-              );
+              widget.onTabChangeRequested(1); // Downloader (Queue) သို့ တန်းကူးမည်
               return NavigationDecision.prevent;
             }
 
