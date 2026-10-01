@@ -12,6 +12,7 @@ class DownloadItem {
   String speed;
   String eta;
   String date;
+  String savePath; // 🚀 မည်သည့်လမ်းကြောင်းတွင် သိမ်းထားကြောင်း မှတ်ထားခြင်း
   bool isPaused = false;
   bool isCanceled = false;
   bool isSelected = false;
@@ -25,6 +26,7 @@ class DownloadItem {
     this.speed = '0.0 MB/s',
     this.eta = '--:--',
     required this.date,
+    this.savePath = '',
   });
 }
 
@@ -32,26 +34,35 @@ class DownloadEngine extends ChangeNotifier {
   static final DownloadEngine _instance = DownloadEngine._internal();
   factory DownloadEngine() => _instance;
   DownloadEngine._internal() {
-    _initDirectory();
     updateStorageInfo();
   }
 
-  static const String downloadPath = '/storage/emulated/0/Download/DataPlus';
+  static const String internalDownloadPath = '/storage/emulated/0/Download/DataPlus';
+  String sdDownloadPath = '';
+
+  // 🚀 လက်ရှိ ရွေးချယ်ထားသော သိမ်းဆည်းရာနေရာ ('internal' သို့မဟုတ် 'sdcard')
+  String storageTarget = 'internal';
+
   final List<DownloadItem> downloads = [];
   bool isDownloading = false;
 
-  // 🚀 တက်ဘ် အလိုအလျောက် ပြောင်းလဲရန် Notifier (စဒေါင်းလျှင် Queue, ပြီးလျှင် Finished)
   final ValueNotifier<String> activeTab = ValueNotifier<String>('Queue');
   VoidCallback? onAllDownloadsFinished;
 
+  // ဖုန်း Storage
   int freeStorageBytes = 0;
   int totalStorageBytes = 0;
 
-  Future<void> _initDirectory() async {
-    final dir = Directory(downloadPath);
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
+  // SD ကတ်
+  bool isSdAvailable = false;
+  int freeSdBytes = 0;
+  int totalSdBytes = 0;
+
+  String get currentActivePath {
+    if (storageTarget == 'sdcard' && isSdAvailable && sdDownloadPath.isNotEmpty) {
+      return '$sdDownloadPath/DataPlus';
     }
+    return internalDownloadPath;
   }
 
   Future<void> updateStorageInfo() async {
@@ -61,9 +72,36 @@ class DownloadEngine extends ChangeNotifier {
       if (res != null) {
         totalStorageBytes = res['total'] ?? 0;
         freeStorageBytes = res['free'] ?? 0;
+
+        isSdAvailable = res['sdAvailable'] ?? false;
+        totalSdBytes = res['sdTotal'] ?? 0;
+        freeSdBytes = res['sdFree'] ?? 0;
+        sdDownloadPath = res['sdPath'] ?? '';
+
+        // အကယ်၍ SD ရွေးထားသော်လည်း SD ကတ် မရှိတော့ပါက ဖုန်း Storage သို့ အလိုအလျောက် ပြန်ထားခြင်း
+        if (storageTarget == 'sdcard' && !isSdAvailable) {
+          storageTarget = 'internal';
+        }
+
+        final dir = Directory(currentActivePath);
+        if (!await dir.exists()) {
+          await dir.create(recursive: true);
+        }
+
         notifyListeners();
       }
     } catch (_) {}
+  }
+
+  // သိမ်းဆည်းမည့်နေရာ ပြောင်းလဲသတ်မှတ်ခြင်း
+  Future<void> setStorageTarget(String target) async {
+    if (target == 'sdcard' && !isSdAvailable) return;
+    storageTarget = target;
+    final dir = Directory(currentActivePath);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    notifyListeners();
   }
 
   int get totalQueuedBytes {
@@ -72,8 +110,10 @@ class DownloadEngine extends ChangeNotifier {
         .fold(0, (sum, item) => sum + item.sizeBytes);
   }
 
+  // လက်ရှိ အသုံးပြုနေသော Storage ပေါ် မူတည်၍ နေရာလုံလောက်မှု စစ်ဆေးခြင်း
   bool get isStorageLow {
-    return totalQueuedBytes > freeStorageBytes && totalQueuedBytes > 0;
+    final activeFree = (storageTarget == 'sdcard' && isSdAvailable) ? freeSdBytes : freeStorageBytes;
+    return totalQueuedBytes > activeFree && totalQueuedBytes > 0;
   }
 
   void addUrls(List<String> urls) {
@@ -99,12 +139,13 @@ class DownloadEngine extends ChangeNotifier {
           url: cleanUrl,
           name: filename,
           date: "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+          savePath: currentActivePath,
         ));
         added = true;
       }
     }
     if (added) {
-      activeTab.value = 'Queue'; // 🚀 ဒေါင်းလုဒ်ထည့်လိုက်သည်နှင့် QUEUE တက်ဘ်သို့ ချက်ချင်းညွှန်းမည်
+      activeTab.value = 'Queue';
       _fetchSizes();
       notifyListeners();
       if (!isDownloading) {
@@ -147,7 +188,8 @@ class DownloadEngine extends ChangeNotifier {
   void deleteItem(DownloadItem item) {
     item.isCanceled = true;
     item.isPaused = true;
-    final file = File('$downloadPath/${item.name}.tmp');
+    final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
+    final file = File('$folder/${item.name}.tmp');
     if (file.existsSync()) {
       try { file.deleteSync(); } catch (_) {}
     }
@@ -159,7 +201,8 @@ class DownloadEngine extends ChangeNotifier {
   void deleteSelected(List<DownloadItem> items) {
     for (var it in items) {
       it.isCanceled = true;
-      final file = File('$downloadPath/${it.name}.tmp');
+      final folder = it.savePath.isNotEmpty ? it.savePath : currentActivePath;
+      final file = File('$folder/${it.name}.tmp');
       if (file.existsSync()) {
         try { file.deleteSync(); } catch (_) {}
       }
@@ -176,7 +219,8 @@ class DownloadEngine extends ChangeNotifier {
     ).toList();
     for (var it in toRemove) {
       it.isCanceled = true;
-      final file = File('$downloadPath/${it.name}.tmp');
+      final folder = it.savePath.isNotEmpty ? it.savePath : currentActivePath;
+      final file = File('$folder/${it.name}.tmp');
       if (file.existsSync()) {
         try { file.deleteSync(); } catch (_) {}
       }
@@ -196,6 +240,7 @@ class DownloadEngine extends ChangeNotifier {
       item.status = 'downloading';
       item.isPaused = false;
       item.isCanceled = false;
+      if (item.savePath.isEmpty) item.savePath = currentActivePath;
       notifyListeners();
 
       try {
@@ -216,20 +261,17 @@ class DownloadEngine extends ChangeNotifier {
     }
     isDownloading = false;
 
-    // 🚀 Queue ထဲရှိ ဖိုင်အားလုံး ပြီးဆုံးသွားပါက Finished မျက်နှာပြင်ဆီ အလိုအလျောက် ကူးပြောင်းပေးခြင်း
     if (!downloads.any((d) => d.status != 'finished')) {
       activeTab.value = 'Finished';
       onAllDownloadsFinished?.call();
     }
   }
 
-  // 🚀 ဖိုင်အမျိုးအစားအလိုက် စစ်ဆေးပြီး အမြန်ဆုံးဆွဲမည့် စနစ်
   Future<void> _downloadSmartEngine(DownloadItem item) async {
     final client = HttpClient();
     int totalBytes = 0;
     bool canMultiThread = false;
 
-    // ၁။ Range Request ရမရ အရင်စစ်ဆေးပြီး ဖိုင်ဆိုဒ်အစစ်ကို ဆွဲထုတ်ခြင်း
     try {
       final probeReq = await client.getUrl(Uri.parse(item.url));
       probeReq.headers.add(HttpHeaders.rangeHeader, 'bytes=0-0');
@@ -251,28 +293,25 @@ class DownloadEngine extends ChangeNotifier {
       await probeResp.drain();
     } catch (_) {}
 
-    // APK ဖိုင် သို့မဟုတ် Range မရသော ဖိုင်ဖြစ်ပါက Single Stream ဖြင့် မပျက်စီးအောင် ဒေါင်းမည်
     if (!canMultiThread || totalBytes < 5 * 1024 * 1024 || item.name.toLowerCase().endsWith('.apk')) {
       await _downloadSingleStream(item, client, totalBytes);
     } else {
-      // ဇာတ်ကားဖိုင်ဖြစ်ပါက 60MB/s ရရှိစေမည့် 4-Thread Direct-Seek ဖြင့် ဒေါင်းမည်
       await _downloadMultiThreadDirectSeek(item, totalBytes);
     }
     client.close();
   }
 
-  // ⚡ 60~80 MB/s ထိုးဆွဲမည့် 4-Thread Direct-Seek Engine
   Future<void> _downloadMultiThreadDirectSeek(DownloadItem item, int totalBytes) async {
     item.sizeBytes = totalBytes;
-    final tempFile = File('$downloadPath/${item.name}.tmp');
-    final finalFile = File('$downloadPath/${item.name}');
+    final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
+    final tempFile = File('$folder/${item.name}.tmp');
+    final finalFile = File('$folder/${item.name}');
 
-    // File အရွယ်အစားကို ကြိုတင်နေရာချထားခြင်း (Zero Merge Time)
     final initRaf = await tempFile.open(mode: FileMode.write);
     await initRaf.truncate(totalBytes);
     await initRaf.close();
 
-    const numThreads = 4; // 4-Thread Concurrent Bandwidth
+    const numThreads = 4;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
       final s = i * partSize;
@@ -292,7 +331,7 @@ class DownloadEngine extends ChangeNotifier {
         final resp = await req.close();
 
         if (resp.statusCode != HttpStatus.partialContent) {
-          throw HttpException('Thread failed with status ${resp.statusCode}');
+          throw HttpException('Thread failed: ${resp.statusCode}');
         }
 
         final raf = await tempFile.open(mode: FileMode.writeOnly);
@@ -340,7 +379,6 @@ class DownloadEngine extends ChangeNotifier {
 
     if (item.isCanceled || item.isPaused) return;
 
-    // အားလုံးပြီးစီးမှသာ နာမည်ပြောင်းပေးမည် (Corrupt မဖြစ်စေရန် စစ်ဆေးခြင်း)
     final totalDone = bytesDownloaded.reduce((a, b) => a + b);
     if (totalDone == totalBytes) {
       if (finalFile.existsSync()) finalFile.deleteSync();
@@ -350,10 +388,10 @@ class DownloadEngine extends ChangeNotifier {
     }
   }
 
-  // APK များနှင့် ဖိုင်အသေးများအတွက် Single Stream
   Future<void> _downloadSingleStream(DownloadItem item, HttpClient client, int totalBytes) async {
-    final tempFile = File('$downloadPath/${item.name}.tmp');
-    final finalFile = File('$downloadPath/${item.name}');
+    final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
+    final tempFile = File('$folder/${item.name}.tmp');
+    final finalFile = File('$folder/${item.name}');
 
     final req = await client.getUrl(Uri.parse(item.url));
     final resp = await req.close();
