@@ -43,6 +43,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
+  // ⚙️ Storage ရွေးချယ်မည့် Setting Dialog
   void _showStorageSettingDialog() {
     showDialog(
       context: context,
@@ -240,65 +241,16 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 🔝 Top Bar
+                // 💾 ဖုန်း STORAGE နှင့် SD ကတ် (Ultra-Compact Slim Card - အပေါ်ဆုံးမှ တန်းစတင်ပါသည်)
                 Container(
-                  color: const Color(0xFF1E232B),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.settings, color: Color(0xFF58A6FF), size: 22),
-                            tooltip: "Storage Settings",
-                            onPressed: _showStorageSettingDialog,
-                          ),
-                          Text(currentTab, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                        ],
-                      ),
-                      if (currentList.isNotEmpty)
-                        Row(
-                          children: [
-                            TextButton.icon(
-                              onPressed: () {
-                                final selectAll = selectedList.length != currentList.length;
-                                for (var item in currentList) {
-                                  item.isSelected = selectAll;
-                                }
-                                setState(() {});
-                              },
-                              icon: const Icon(Icons.select_all, size: 16, color: Color(0xFF58A6FF)),
-                              label: Text(selectedList.length == currentList.length ? 'None' : 'All', style: const TextStyle(color: Color(0xFF58A6FF))),
-                            ),
-                            if (selectedList.isNotEmpty)
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB91C1C), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-                                onPressed: () => engine.deleteSelected(selectedList),
-                                child: Text('Delete (${selectedList.length})', style: const TextStyle(color: Colors.white, fontSize: 12)),
-                              )
-                            else
-                              TextButton.icon(
-                                onPressed: () => engine.removeAll(currentTab),
-                                icon: const Icon(Icons.delete_sweep, size: 16, color: Color(0xFFF85149)),
-                                label: const Text('Remove All', style: TextStyle(color: Color(0xFFF85149))),
-                              ),
-                          ],
-                        )
-                    ],
-                  ),
-                ),
-
-                // 💾 ဖုန်း STORAGE နှင့် SD ကတ် (တစ်တန်းတည်း ၂ ကွက်)
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFF16222F),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: engine.isStorageLow ? const Color(0xFFFF4444) : const Color(0xFF2563EB),
-                      width: 1.2,
+                      width: 1.0,
                     ),
                   ),
                   child: Column(
@@ -310,10 +262,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             child: InkWell(
                               onTap: () => engine.setStorageTarget('internal'),
                               child: Container(
-                                padding: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                                 decoration: BoxDecoration(
                                   color: isInternalActive ? const Color(0xFF1E2F44) : const Color(0xFF0F1824),
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(6),
                                   border: Border.all(color: isInternalActive ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
                                 ),
                                 child: Column(
@@ -324,30 +276,35 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                       children: [
                                         const Row(
                                           children: [
-                                            Icon(Icons.phone_android, color: Color(0xFF00E676), size: 15),
-                                            SizedBox(width: 4),
-                                            Text("ဖုန်း Storage", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                                            Icon(Icons.phone_android, color: Color(0xFF00E676), size: 13),
+                                            SizedBox(width: 3),
+                                            Text("ဖုန်း Storage", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
                                           ],
                                         ),
                                         if (isInternalActive)
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                            decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(4)),
-                                            child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                            decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(3)),
+                                            child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 8.5, fontWeight: FontWeight.bold)),
                                           )
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(_formatBytes(engine.freeStorageBytes), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 13)),
-                                    Text("စုစုပေါင်း: ${_formatBytes(engine.totalStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10)),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(_formatBytes(engine.freeStorageBytes), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
+                                        Text("/ ${_formatBytes(engine.totalStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 9.5)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
                                     ClipRRect(
-                                      borderRadius: BorderRadius.circular(3),
+                                      borderRadius: BorderRadius.circular(2),
                                       child: LinearProgressIndicator(
                                         value: engine.totalStorageBytes > 0 ? (1.0 - (engine.freeStorageBytes / engine.totalStorageBytes)) : 0.0,
                                         backgroundColor: const Color(0xFF263342),
                                         color: const Color(0xFF00E676),
-                                        minHeight: 4,
+                                        minHeight: 3.5,
                                       ),
                                     )
                                   ],
@@ -355,17 +312,17 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
 
                           // 💾 ညာဘက်ကွက်: SD ကတ်
                           Expanded(
                             child: InkWell(
                               onTap: engine.isSdAvailable ? () => engine.setStorageTarget('sdcard') : null,
                               child: Container(
-                                padding: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                                 decoration: BoxDecoration(
                                   color: isSdActive ? const Color(0xFF1E2F44) : const Color(0xFF0F1824),
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(6),
                                   border: Border.all(color: isSdActive ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
                                 ),
                                 child: Column(
@@ -376,37 +333,41 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                       children: [
                                         Row(
                                           children: [
-                                            Icon(Icons.sd_card, color: engine.isSdAvailable ? const Color(0xFF38BDF8) : const Color(0xFF6E7681), size: 15),
-                                            const SizedBox(width: 4),
-                                            const Text("SD ကတ်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                                            Icon(Icons.sd_card, color: engine.isSdAvailable ? const Color(0xFF38BDF8) : const Color(0xFF6E7681), size: 13),
+                                            const SizedBox(width: 3),
+                                            const Text("SD ကတ်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
                                           ],
                                         ),
                                         if (isSdActive)
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                            decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(4)),
-                                            child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                            decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(3)),
+                                            child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 8.5, fontWeight: FontWeight.bold)),
                                           )
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 2),
                                     if (engine.isSdAvailable) ...[
-                                      Text(_formatBytes(engine.freeSdBytes), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)),
-                                      Text("စုစုပေါင်း: ${_formatBytes(engine.totalSdBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10)),
-                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(_formatBytes(engine.freeSdBytes), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                                          Text("/ ${_formatBytes(engine.totalSdBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 9.5)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 3),
                                       ClipRRect(
-                                        borderRadius: BorderRadius.circular(3),
+                                        borderRadius: BorderRadius.circular(2),
                                         child: LinearProgressIndicator(
                                           value: engine.totalSdBytes > 0 ? (1.0 - (engine.freeSdBytes / engine.totalSdBytes)) : 0.0,
                                           backgroundColor: const Color(0xFF263342),
                                           color: const Color(0xFF38BDF8),
-                                          minHeight: 4,
+                                          minHeight: 3.5,
                                         ),
                                       )
                                     ] else ...[
-                                      const Text("မရှိပါ", style: TextStyle(color: Color(0xFF8B949E), fontWeight: FontWeight.bold, fontSize: 13)),
-                                      const Text("ထည့်သွင်းမထားပါ", style: TextStyle(color: Color(0xFF484F58), fontSize: 10)),
-                                      const SizedBox(height: 8),
+                                      const Text("မရှိပါ", style: TextStyle(color: Color(0xFF8B949E), fontWeight: FontWeight.bold, fontSize: 12)),
+                                      const SizedBox(height: 6),
                                     ]
                                   ],
                                 ),
@@ -416,15 +377,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ],
                       ),
 
-                      // ဒေါင်းလုဒ် အရွယ်အစားနှင့် Warning Bar
+                      // ဒေါင်းလုဒ် အရွယ်အစား & Warning (Slim Strip)
                       Container(
                         width: double.infinity,
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                        margin: const EdgeInsets.only(top: 5),
+                        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 8),
                         decoration: BoxDecoration(
                           color: engine.isStorageLow ? const Color(0xFF2A1215) : const Color(0xFF0E1726),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: engine.isStorageLow ? const Color(0xFFFF4D4D) : const Color(0xFF1E3A8A)),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: engine.isStorageLow ? const Color(0xFFFF4D4D) : const Color(0xFF1E3A8A), width: 0.8),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -434,11 +395,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                               style: TextStyle(
                                 color: engine.isStorageLow ? const Color(0xFFFFA1A1) : const Color(0xFF38BDF8),
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 11,
                               ),
                             ),
                             if (engine.isStorageLow)
-                              const Text("⚠️ နေရာမလုံလောက်ပါ!", style: TextStyle(color: Color(0xFFFF4D4D), fontWeight: FontWeight.bold, fontSize: 11)),
+                              const Text("⚠️ နေရာမလုံလောက်ပါ!", style: TextStyle(color: Color(0xFFFF4D4D), fontWeight: FontWeight.bold, fontSize: 10)),
                           ],
                         ),
                       ),
@@ -446,41 +407,96 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // 🚀 အဓိက "စတင်ဒေါင်းမည် (Start Download)" Action Banner
+                // 🚀 Queue Start/Pause Banner (Queue ထဲ ဖိုင်ရှိမှသာ ပေါ်မည်)
                 if (currentTab == 'Queue' && qCount > 0)
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     child: engine.isDownloading
                         ? ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFD97706),
-                              minimumSize: const Size(double.infinity, 44),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              minimumSize: const Size(double.infinity, 38),
+                              padding: EdgeInsets.zero,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                             onPressed: () => engine.pauseAll(),
-                            icon: const Icon(Icons.pause, color: Colors.white),
-                            label: const Text("⏸️ အားလုံး ခေတ္တရပ်မည် (Pause All)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            icon: const Icon(Icons.pause, color: Colors.white, size: 18),
+                            label: const Text("⏸️ အားလုံး ခေတ္တရပ်မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                           )
                         : ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: engine.isStorageLow ? const Color(0xFFB91C1C) : const Color(0xFF059669),
-                              minimumSize: const Size(double.infinity, 44),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              elevation: 4,
+                              minimumSize: const Size(double.infinity, 38),
+                              padding: EdgeInsets.zero,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                             onPressed: () => engine.startAllQueued(),
-                            icon: const Icon(Icons.play_arrow, color: Colors.white, size: 22),
+                            icon: const Icon(Icons.play_arrow, color: Colors.white, size: 20),
                             label: Text(
                               "🚀 စတင်ဒေါင်းမည် ($qCount ဖိုင်)",
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                           ),
                   ),
 
-                // 📋 List View
+                // 📋 Contextual Action Bar (စာရင်းရှိမှသာ ပေါ်မည့် Select All / Delete အတန်းကျဉ်းလေး)
+                if (currentList.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    color: const Color(0xFF141A22),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "$currentTab (${currentList.length})",
+                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                        Row(
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                final selectAll = selectedList.length != currentList.length;
+                                for (var item in currentList) {
+                                  item.isSelected = selectAll;
+                                }
+                                setState(() {});
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                child: Text(
+                                  selectedList.length == currentList.length ? 'None' : 'Select All',
+                                  style: const TextStyle(color: Color(0xFF58A6FF), fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (selectedList.isNotEmpty)
+                              InkWell(
+                                onTap: () => engine.deleteSelected(selectedList),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: const Color(0xFFB91C1C), borderRadius: BorderRadius.circular(4)),
+                                  child: Text('Delete (${selectedList.length})', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                ),
+                              )
+                            else
+                              InkWell(
+                                onTap: () => engine.removeAll(currentTab),
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  child: Text('Clear All', style: TextStyle(color: Color(0xFFF85149), fontSize: 11, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                          ],
+                        )
+                      ],
+                    ),
+                  ),
+
+                // 📋 List View (ကျစ်လျစ်သော Slim Padding ဖြင့် ဖိုင်အများအပြား မြင်နိုင်ပါသည်)
                 Expanded(
                   child: currentList.isEmpty
-                      ? Center(child: Text("No $currentTab downloads", style: const TextStyle(color: Color(0xFF484F58))))
+                      ? Center(child: Text("No $currentTab items", style: const TextStyle(color: Color(0xFF484F58), fontSize: 13)))
                       : ListView.builder(
                           itemCount: currentList.length,
                           itemBuilder: (context, index) {
@@ -493,83 +509,91 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             return InkWell(
                               onTap: isDone ? () => _openDownloadedFile(item) : null,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: const BoxDecoration(
-                                  color: Color(0xFF13171D),
-                                  border: Border(bottom: BorderSide(color: Color(0xFF21262E), width: 0.6)),
+                                  color: Color(0xFF101317),
+                                  border: Border(bottom: BorderSide(color: Color(0xFF1E232B), width: 0.6)),
                                 ),
                                 child: Column(
                                   children: [
                                     Row(
                                       children: [
-                                        Checkbox(
-                                          value: item.isSelected,
-                                          activeColor: const Color(0xFF2563EB),
-                                          onChanged: (v) => setState(() => item.isSelected = v ?? false),
+                                        SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: Checkbox(
+                                            value: item.isSelected,
+                                            activeColor: const Color(0xFF2563EB),
+                                            onChanged: (v) => setState(() => item.isSelected = v ?? false),
+                                          ),
                                         ),
+                                        const SizedBox(width: 4),
                                         if (isDone)
-                                          Icon(isApk ? Icons.android : Icons.check_circle, color: const Color(0xFF00E676), size: 22)
+                                          Icon(isApk ? Icons.android : Icons.check_circle, color: const Color(0xFF00E676), size: 18)
                                         else if (isDl)
-                                          IconButton(
-                                            icon: const Icon(Icons.pause_circle_filled, color: Color(0xFFE3B341), size: 22),
-                                            onPressed: () => engine.togglePauseResume(item),
+                                          InkWell(
+                                            onTap: () => engine.togglePauseResume(item),
+                                            child: const Icon(Icons.pause_circle_filled, color: Color(0xFFE3B341), size: 20),
                                           )
                                         else if (isPaused)
-                                          IconButton(
-                                            icon: const Icon(Icons.play_circle_fill, color: Color(0xFF58A6FF), size: 22),
-                                            onPressed: () => engine.togglePauseResume(item),
+                                          InkWell(
+                                            onTap: () => engine.togglePauseResume(item),
+                                            child: const Icon(Icons.play_circle_fill, color: Color(0xFF58A6FF), size: 20),
                                           )
                                         else
-                                          const Icon(Icons.access_time, color: Color(0xFF8B949E), size: 20),
+                                          const Icon(Icons.access_time, color: Color(0xFF8B949E), size: 18),
                                         const SizedBox(width: 6),
                                         Expanded(
-                                          child: Text(item.name, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                          child: Text(item.name, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12.5)),
                                         ),
                                         if (isDone)
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: isApk ? const Color(0xFF1E40AF) : const Color(0xFF047857),
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                               minimumSize: Size.zero,
                                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                             ),
                                             onPressed: () => _openDownloadedFile(item),
-                                            icon: Icon(isApk ? Icons.system_update : Icons.play_arrow, size: 14, color: Colors.white),
-                                            label: Text(isApk ? "သွင်းမည်" : "ဖွင့်မည်", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                            icon: Icon(isApk ? Icons.system_update : Icons.play_arrow, size: 13, color: Colors.white),
+                                            label: Text(isApk ? "သွင်းမည်" : "ဖွင့်မည်", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                                           ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline, color: Color(0xFF8B949E), size: 18),
-                                          onPressed: () => engine.deleteItem(item),
+                                        InkWell(
+                                          onTap: () => engine.deleteItem(item),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(4.0),
+                                            child: Icon(Icons.close, color: Color(0xFF8B949E), size: 16),
+                                          ),
                                         )
                                       ],
                                     ),
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                          Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5)),
                                           Text(
-                                            item.status == 'queued' ? "စောင့်ဆိုင်းနေသည် (Waiting)" : "${item.speed}  •  ${item.eta}",
+                                            item.status == 'queued' ? "စောင့်ဆိုင်းနေသည်" : "${item.speed}  •  ${item.eta}",
                                             style: TextStyle(
                                               color: isPaused
                                                   ? const Color(0xFFE3B341)
                                                   : (item.status == 'queued' ? const Color(0xFF58A6FF) : const Color(0xFF00E676)),
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 12,
+                                              fontSize: 11,
                                             ),
                                           ),
-                                          Text(item.date, style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5)),
+                                          Text(item.date, style: const TextStyle(color: Color(0xFF6E7681), fontSize: 10)),
                                         ],
                                       ),
                                     ),
                                     ClipRRect(
-                                      borderRadius: BorderRadius.circular(3),
+                                      borderRadius: BorderRadius.circular(2),
                                       child: LinearProgressIndicator(
                                         value: item.progress,
-                                        backgroundColor: const Color(0xFF21262E),
+                                        backgroundColor: const Color(0xFF1E232B),
                                         color: isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676),
-                                        minHeight: 6,
+                                        minHeight: 4,
                                       ),
                                     )
                                   ],
@@ -580,53 +604,63 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                 ),
 
-                // 🔻 ADM Bottom Bar
+                // 🔻 ADM Bottom Bar (Power ➔ Settings ➔ Add ➔ Queue ➔ Finished)
                 Container(
                   color: const Color(0xFF1E232B),
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 15),
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
+                      // 1. Power (Exit)
                       IconButton(
-                        icon: const Icon(Icons.power_settings_new, color: Color(0xFFF85149), size: 22),
+                        icon: const Icon(Icons.power_settings_new, color: Color(0xFFF85149), size: 21),
                         tooltip: "Exit",
                         onPressed: () => SystemNavigator.pop(),
                       ),
+                      // 2. ⚙️ Settings (Power နှင့် + ကြားထဲ ထည့်သွင်းထားပါသည်)
+                      IconButton(
+                        icon: const Icon(Icons.settings, color: Color(0xFF58A6FF), size: 21),
+                        tooltip: "Storage Settings",
+                        onPressed: _showStorageSettingDialog,
+                      ),
+                      // 3. ➕ Add Links
                       IconButton(
                         icon: Container(
                           padding: const EdgeInsets.all(5),
                           decoration: const BoxDecoration(color: Color(0xFF238636), shape: BoxShape.circle),
-                          child: const Icon(Icons.add, color: Colors.white, size: 20),
+                          child: const Icon(Icons.add, color: Colors.white, size: 19),
                         ),
                         onPressed: _showAddLinksDialog,
                       ),
+                      // 4. Queue Tab
                       InkWell(
                         onTap: () => setState(() => currentTab = 'Queue'),
                         child: Row(
                           children: [
-                            Icon(Icons.access_time, color: currentTab == 'Queue' ? const Color(0xFF58A6FF) : const Color(0xFF8B949E), size: 18),
+                            Icon(Icons.access_time, color: currentTab == 'Queue' ? const Color(0xFF58A6FF) : const Color(0xFF8B949E), size: 17),
                             const SizedBox(width: 4),
                             Text("Queue", style: TextStyle(color: currentTab == 'Queue' ? const Color(0xFF58A6FF) : const Color(0xFF8B949E), fontWeight: FontWeight.bold, fontSize: 12)),
                             const SizedBox(width: 4),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(color: qCount > 0 ? const Color(0xFF2563EB) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(color: qCount > 0 ? const Color(0xFF2563EB) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(8)),
                               child: Text("$qCount", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                             )
                           ],
                         ),
                       ),
+                      // 5. Finished Tab
                       InkWell(
                         onTap: () => setState(() => currentTab = 'Finished'),
                         child: Row(
                           children: [
-                            Icon(Icons.check_circle, color: currentTab == 'Finished' ? const Color(0xFF00E676) : const Color(0xFF8B949E), size: 18),
+                            Icon(Icons.check_circle, color: currentTab == 'Finished' ? const Color(0xFF00E676) : const Color(0xFF8B949E), size: 17),
                             const SizedBox(width: 4),
                             Text("Finished", style: TextStyle(color: currentTab == 'Finished' ? const Color(0xFF00E676) : const Color(0xFF8B949E), fontWeight: FontWeight.bold, fontSize: 12)),
                             const SizedBox(width: 4),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(color: fCount > 0 ? const Color(0xFF238636) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(color: fCount > 0 ? const Color(0xFF238636) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(8)),
                               child: Text("$fCount", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                             )
                           ],
