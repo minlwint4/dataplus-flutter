@@ -12,7 +12,7 @@ class DownloadItem {
   String speed;
   String eta;
   String date;
-  String savePath; // 🚀 မည်သည့်လမ်းကြောင်းတွင် သိမ်းထားကြောင်း မှတ်ထားခြင်း
+  String savePath;
   bool isPaused = false;
   bool isCanceled = false;
   bool isSelected = false;
@@ -40,7 +40,6 @@ class DownloadEngine extends ChangeNotifier {
   static const String internalDownloadPath = '/storage/emulated/0/Download/DataPlus';
   String sdDownloadPath = '';
 
-  // 🚀 လက်ရှိ ရွေးချယ်ထားသော သိမ်းဆည်းရာနေရာ ('internal' သို့မဟုတ် 'sdcard')
   String storageTarget = 'internal';
 
   final List<DownloadItem> downloads = [];
@@ -49,11 +48,9 @@ class DownloadEngine extends ChangeNotifier {
   final ValueNotifier<String> activeTab = ValueNotifier<String>('Queue');
   VoidCallback? onAllDownloadsFinished;
 
-  // ဖုန်း Storage
   int freeStorageBytes = 0;
   int totalStorageBytes = 0;
 
-  // SD ကတ်
   bool isSdAvailable = false;
   int freeSdBytes = 0;
   int totalSdBytes = 0;
@@ -78,7 +75,6 @@ class DownloadEngine extends ChangeNotifier {
         freeSdBytes = res['sdFree'] ?? 0;
         sdDownloadPath = res['sdPath'] ?? '';
 
-        // အကယ်၍ SD ရွေးထားသော်လည်း SD ကတ် မရှိတော့ပါက ဖုန်း Storage သို့ အလိုအလျောက် ပြန်ထားခြင်း
         if (storageTarget == 'sdcard' && !isSdAvailable) {
           storageTarget = 'internal';
         }
@@ -93,13 +89,18 @@ class DownloadEngine extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // သိမ်းဆည်းမည့်နေရာ ပြောင်းလဲသတ်မှတ်ခြင်း
+  // 🚀 User က Storage ရွေးချယ်လိုက်ပါက Queue ထဲက မဒေါင်းရသေးသော ဖိုင်များ၏ သိမ်းဆည်းရာလမ်းကြောင်းကိုပါ အလိုအလျောက် လိုက်ပြောင်းပေးခြင်း
   Future<void> setStorageTarget(String target) async {
     if (target == 'sdcard' && !isSdAvailable) return;
     storageTarget = target;
     final dir = Directory(currentActivePath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
+    }
+    for (var item in downloads) {
+      if (item.status == 'queued' || item.status == 'paused') {
+        item.savePath = currentActivePath;
+      }
     }
     notifyListeners();
   }
@@ -110,12 +111,12 @@ class DownloadEngine extends ChangeNotifier {
         .fold(0, (sum, item) => sum + item.sizeBytes);
   }
 
-  // လက်ရှိ အသုံးပြုနေသော Storage ပေါ် မူတည်၍ နေရာလုံလောက်မှု စစ်ဆေးခြင်း
   bool get isStorageLow {
     final activeFree = (storageTarget == 'sdcard' && isSdAvailable) ? freeSdBytes : freeStorageBytes;
     return totalQueuedBytes > activeFree && totalQueuedBytes > 0;
   }
 
+  // 🚀 ဖိုင်များ ထည့်သွင်းခြင်း (တန်းမဒေါင်းဘဲ Queue ထဲတွင်သာ အသင့်ထားရှိခြင်း)
   void addUrls(List<String> urls) {
     bool added = false;
     for (var u in urls) {
@@ -145,13 +146,37 @@ class DownloadEngine extends ChangeNotifier {
       }
     }
     if (added) {
-      activeTab.value = 'Queue';
+      activeTab.value = 'Queue'; // Queue စာမျက်နှာသို့ ချက်ချင်းညွှန်းပေးမည်
       _fetchSizes();
       notifyListeners();
-      if (!isDownloading) {
-        _startWorker();
+      // ⚠️ _startWorker() ကို အလိုအလျောက် မခေါ်တော့ပါ (User စတင်ခိုင်းမှသာ စတင်ပါမည်)
+    }
+  }
+
+  // 🚀 User က "စတင်ဒေါင်းမည်" ခလုတ်နှိပ်မှသာ ဒေါင်းလုဒ်စတင်မည့် Function
+  void startAllQueued() {
+    for (var item in downloads) {
+      if (item.status == 'paused') {
+        item.status = 'queued';
+        item.isPaused = false;
       }
     }
+    notifyListeners();
+    if (!isDownloading) {
+      _startWorker();
+    }
+  }
+
+  // ⏸️ ဒေါင်းလုဒ်အားလုံး ခေတ္တရပ်နားခြင်း
+  void pauseAll() {
+    for (var item in downloads) {
+      if (item.status == 'downloading' || item.status == 'queued') {
+        item.status = 'paused';
+        item.isPaused = true;
+        item.speed = 'Paused';
+      }
+    }
+    notifyListeners();
   }
 
   Future<void> _fetchSizes() async {
