@@ -79,7 +79,6 @@ jobs:
 
         sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
 
-        # ⚡ Phone Storage နှင့် SD Card တိုင်းတာပေးမည့် Native Kotlin Bridge
         mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
         printf '%s\n' \
           'package com.example.dataplus_app' \
@@ -155,8 +154,9 @@ jobs:
           dart run flutter_launcher_icons
         fi
 
+    # ⚡ Commit အကြိမ်ရေအလိုက် Version Code (1, 2, 3...) ကို အလိုအလျောက် တိုးပေးမည့်အဆင့်
     - name: Build APK (Release)
-      run: flutter build apk --release
+      run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
