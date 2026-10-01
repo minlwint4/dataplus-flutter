@@ -43,7 +43,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // 🚀 အပေါ်ဘယ်ဘက် Menu ကို နှိပ်ပါက Storage ရွေးချယ်မည့် Setting Dialog ပေါ်လာခြင်း
   void _showStorageSettingDialog() {
     showDialog(
       context: context,
@@ -120,7 +119,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
 
-    // သတ်မှတ်ထားသောနေရာတွင် မရှိပါက အခြားနေရာတွင် ရှိမရှိ စစ်ဆေးခြင်း
     if (!await file.exists()) {
       final altFolder = (folder == DownloadEngine.internalDownloadPath) ? '${engine.sdDownloadPath}/DataPlus' : DownloadEngine.internalDownloadPath;
       final altFile = File('$altFolder/${item.name}');
@@ -212,7 +210,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 engine.addUrls(urls);
               }
             },
-            child: const Text("🚀 စတင်ဒေါင်းမည်", style: TextStyle(color: Colors.white)),
+            child: const Text("Queue ထဲ ထည့်မည်", style: TextStyle(color: Colors.white)),
           )
         ],
       ),
@@ -251,7 +249,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     children: [
                       Row(
                         children: [
-                          // 🚀 အပေါ်ဘယ်ဘက် Setting Icon ကို နှိပ်ပါက Dialog ပွင့်မည်
                           IconButton(
                             icon: const Icon(Icons.settings, color: Color(0xFF58A6FF), size: 22),
                             tooltip: "Storage Settings",
@@ -292,7 +289,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // 💾 ဖုန်း STORAGE နှင့် SD ကတ် (တစ်တန်းတည်း ၂ ကွက် Compact Card)
+                // 💾 ဖုန်း STORAGE နှင့် SD ကတ် (တစ်တန်းတည်း ၂ ကွက်)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   padding: const EdgeInsets.all(10),
@@ -449,6 +446,37 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
+                // 🚀 အဓိက "စတင်ဒေါင်းမည် (Start Download)" Action Banner
+                if (currentTab == 'Queue' && qCount > 0)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    child: engine.isDownloading
+                        ? ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFD97706),
+                              minimumSize: const Size(double.infinity, 44),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () => engine.pauseAll(),
+                            icon: const Icon(Icons.pause, color: Colors.white),
+                            label: const Text("⏸️ အားလုံး ခေတ္တရပ်မည် (Pause All)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          )
+                        : ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: engine.isStorageLow ? const Color(0xFFB91C1C) : const Color(0xFF059669),
+                              minimumSize: const Size(double.infinity, 44),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 4,
+                            ),
+                            onPressed: () => engine.startAllQueued(),
+                            icon: const Icon(Icons.play_arrow, color: Colors.white, size: 22),
+                            label: Text(
+                              "🚀 စတင်ဒေါင်းမည် ($qCount ဖိုင်)",
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ),
+                  ),
+
                 // 📋 List View
                 Expanded(
                   child: currentList.isEmpty
@@ -521,7 +549,16 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                                          Text("${item.speed}  •  ${item.eta}", style: TextStyle(color: isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
+                                          Text(
+                                            item.status == 'queued' ? "စောင့်ဆိုင်းနေသည် (Waiting)" : "${item.speed}  •  ${item.eta}",
+                                            style: TextStyle(
+                                              color: isPaused
+                                                  ? const Color(0xFFE3B341)
+                                                  : (item.status == 'queued' ? const Color(0xFF58A6FF) : const Color(0xFF00E676)),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
                                           Text(item.date, style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5)),
                                         ],
                                       ),
