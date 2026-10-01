@@ -18,7 +18,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   @override
   void initState() {
     super.initState();
-    // 🚀 စတင်ချိန်တွင် Engine ၏ activeTab အတိုင်း (Queue) ကို တန်းဖွင့်ပေးခြင်း
     currentTab = engine.activeTab.value;
     engine.activeTab.addListener(_handleTabChange);
   }
@@ -44,20 +43,99 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  Future<void> _openDownloadedFile(String fileName) async {
-    final fullPath = '${DownloadEngine.downloadPath}/$fileName';
-    final file = File(fullPath);
+  // 🚀 အပေါ်ဘယ်ဘက် Menu ကို နှိပ်ပါက Storage ရွေးချယ်မည့် Setting Dialog ပေါ်လာခြင်း
+  void _showStorageSettingDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E232B),
+            title: const Row(
+              children: [
+                Icon(Icons.settings_suggest, color: Color(0xFF58A6FF), size: 22),
+                SizedBox(width: 8),
+                Text("ဒေါင်းလုဒ် သိမ်းဆည်းမည့်နေရာ", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<String>(
+                  value: 'internal',
+                  groupValue: engine.storageTarget,
+                  activeColor: const Color(0xFF00E676),
+                  title: const Text("📱 ဖုန်း Storage (Internal)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  subtitle: Text("လက်ကျန်: ${_formatBytes(engine.freeStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                  onChanged: (val) {
+                    if (val != null) {
+                      engine.setStorageTarget(val);
+                      setModalState(() {});
+                      setState(() {});
+                      Navigator.pop(ctx);
+                    }
+                  },
+                ),
+                RadioListTile<String>(
+                  value: 'sdcard',
+                  groupValue: engine.storageTarget,
+                  activeColor: const Color(0xFF00E676),
+                  title: Row(
+                    children: [
+                      const Text("💾 SD ကတ် (Memory Card)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      if (!engine.isSdAvailable)
+                        const Text(" (မရှိပါ)", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
+                    ],
+                  ),
+                  subtitle: Text(
+                    engine.isSdAvailable ? "လက်ကျန်: ${_formatBytes(engine.freeSdBytes)}" : "ဖုန်းထဲတွင် SD ကတ် ထည့်မထားပါ",
+                    style: TextStyle(color: engine.isSdAvailable ? const Color(0xFF8B949E) : const Color(0xFFF85149), fontSize: 11),
+                  ),
+                  onChanged: engine.isSdAvailable
+                      ? (val) {
+                          if (val != null) {
+                            engine.setStorageTarget(val);
+                            setModalState(() {});
+                            setState(() {});
+                            Navigator.pop(ctx);
+                          }
+                        }
+                      : null,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("ပိတ်မည်", style: TextStyle(color: Color(0xFF8B949E))),
+              )
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _openDownloadedFile(DownloadItem item) async {
+    final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
+    var file = File('$folder/${item.name}');
+
+    // သတ်မှတ်ထားသောနေရာတွင် မရှိပါက အခြားနေရာတွင် ရှိမရှိ စစ်ဆေးခြင်း
     if (!await file.exists()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ ဖိုင်မတွေ့ရှိပါ')),
-        );
+      final altFolder = (folder == DownloadEngine.internalDownloadPath) ? '${engine.sdDownloadPath}/DataPlus' : DownloadEngine.internalDownloadPath;
+      final altFile = File('$altFolder/${item.name}');
+      if (await altFile.exists()) {
+        file = altFile;
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ ဖိုင်မတွေ့ရှိပါ')));
+        }
+        return;
       }
-      return;
     }
 
     String? type;
-    final lower = fileName.toLowerCase();
+    final lower = item.name.toLowerCase();
     if (lower.endsWith('.apk')) {
       type = 'application/vnd.android.package-archive';
     } else if (lower.endsWith('.mp4')) {
@@ -66,11 +144,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       type = 'video/*';
     }
 
-    final result = await OpenFilex.open(fullPath, type: type);
+    final result = await OpenFilex.open(file.path, type: type);
     if (result.type != ResultType.done && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('⚠️ ${result.message}')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ ${result.message}')));
     }
   }
 
@@ -158,6 +234,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
         final selectedList = currentList.where((d) => d.isSelected).toList();
 
+        final isInternalActive = engine.storageTarget == 'internal';
+        final isSdActive = engine.storageTarget == 'sdcard';
+
         return Scaffold(
           backgroundColor: const Color(0xFF101317),
           body: SafeArea(
@@ -166,14 +245,18 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 // 🔝 Top Bar
                 Container(
                   color: const Color(0xFF1E232B),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.menu, color: Color(0xFFC9D1D9), size: 22),
-                          const SizedBox(width: 10),
+                          // 🚀 အပေါ်ဘယ်ဘက် Setting Icon ကို နှိပ်ပါက Dialog ပွင့်မည်
+                          IconButton(
+                            icon: const Icon(Icons.settings, color: Color(0xFF58A6FF), size: 22),
+                            tooltip: "Storage Settings",
+                            onPressed: _showStorageSettingDialog,
+                          ),
                           Text(currentTab, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                         ],
                       ),
@@ -209,87 +292,159 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // 💾 ဖုန်း STORAGE လက်ကျန် Card
+                // 💾 ဖုန်း STORAGE နှင့် SD ကတ် (တစ်တန်းတည်း ၂ ကွက် Compact Card)
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF16222F),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: engine.isStorageLow ? const Color(0xFFFF4444) : const Color(0xFF2563EB),
-                      width: 1.5,
+                      width: 1.2,
                     ),
                   ),
                   child: Column(
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.sd_storage, color: Color(0xFF00E676), size: 18),
-                              SizedBox(width: 6),
-                              Text("ဖုန်း STORAGE လက်ကျန်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                            ],
+                          // 📱 ဘယ်ဘက်ကွက်: ဖုန်း Storage
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => engine.setStorageTarget('internal'),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isInternalActive ? const Color(0xFF1E2F44) : const Color(0xFF0F1824),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: isInternalActive ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Row(
+                                          children: [
+                                            Icon(Icons.phone_android, color: Color(0xFF00E676), size: 15),
+                                            SizedBox(width: 4),
+                                            Text("ဖုန်း Storage", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                                          ],
+                                        ),
+                                        if (isInternalActive)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(4)),
+                                            child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+                                          )
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(_formatBytes(engine.freeStorageBytes), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 13)),
+                                    Text("စုစုပေါင်း: ${_formatBytes(engine.totalStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10)),
+                                    const SizedBox(height: 4),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(3),
+                                      child: LinearProgressIndicator(
+                                        value: engine.totalStorageBytes > 0 ? (1.0 - (engine.freeStorageBytes / engine.totalStorageBytes)) : 0.0,
+                                        backgroundColor: const Color(0xFF263342),
+                                        color: const Color(0xFF00E676),
+                                        minHeight: 4,
+                                      ),
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: engine.isStorageLow ? const Color(0xFFB91C1C) : const Color(0xFF1E40AF),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              "${((engine.freeStorageBytes / (engine.totalStorageBytes > 0 ? engine.totalStorageBytes : 1)) * 100).toStringAsFixed(0)}% ကျန်ရှိ",
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          )
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Text("လက်ကျန်: ${_formatBytes(engine.freeStorageBytes)}", style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 15)),
                           const SizedBox(width: 8),
-                          Text("(စုစုပေါင်း: ${_formatBytes(engine.totalStorageBytes)})", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+
+                          // 💾 ညာဘက်ကွက်: SD ကတ်
+                          Expanded(
+                            child: InkWell(
+                              onTap: engine.isSdAvailable ? () => engine.setStorageTarget('sdcard') : null,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isSdActive ? const Color(0xFF1E2F44) : const Color(0xFF0F1824),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: isSdActive ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.sd_card, color: engine.isSdAvailable ? const Color(0xFF38BDF8) : const Color(0xFF6E7681), size: 15),
+                                            const SizedBox(width: 4),
+                                            const Text("SD ကတ်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                                          ],
+                                        ),
+                                        if (isSdActive)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(4)),
+                                            child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+                                          )
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    if (engine.isSdAvailable) ...[
+                                      Text(_formatBytes(engine.freeSdBytes), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)),
+                                      Text("စုစုပေါင်း: ${_formatBytes(engine.totalSdBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10)),
+                                      const SizedBox(height: 4),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(3),
+                                        child: LinearProgressIndicator(
+                                          value: engine.totalSdBytes > 0 ? (1.0 - (engine.freeSdBytes / engine.totalSdBytes)) : 0.0,
+                                          backgroundColor: const Color(0xFF263342),
+                                          color: const Color(0xFF38BDF8),
+                                          minHeight: 4,
+                                        ),
+                                      )
+                                    ] else ...[
+                                      const Text("မရှိပါ", style: TextStyle(color: Color(0xFF8B949E), fontWeight: FontWeight.bold, fontSize: 13)),
+                                      const Text("ထည့်သွင်းမထားပါ", style: TextStyle(color: Color(0xFF484F58), fontSize: 10)),
+                                      const SizedBox(height: 8),
+                                    ]
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
+
+                      // ဒေါင်းလုဒ် အရွယ်အစားနှင့် Warning Bar
                       Container(
                         width: double.infinity,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                         decoration: BoxDecoration(
                           color: engine.isStorageLow ? const Color(0xFF2A1215) : const Color(0xFF0E1726),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: engine.isStorageLow ? const Color(0xFFFF4D4D) : const Color(0xFF1E3A8A)),
                         ),
-                        child: Column(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
                               "ဒေါင်းလုဒ်အရွယ်အစား: ${_formatBytes(engine.totalQueuedBytes)}",
                               style: TextStyle(
                                 color: engine.isStorageLow ? const Color(0xFFFFA1A1) : const Color(0xFF38BDF8),
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                                fontSize: 12,
                               ),
                             ),
                             if (engine.isStorageLow)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 2),
-                                child: Text("⚠️ လက်ကျန် storage မလုံလောက်ပါ!", style: TextStyle(color: Color(0xFFFF4D4D), fontWeight: FontWeight.bold, fontSize: 12.5)),
-                              )
+                              const Text("⚠️ နေရာမလုံလောက်ပါ!", style: TextStyle(color: Color(0xFFFF4D4D), fontWeight: FontWeight.bold, fontSize: 11)),
                           ],
                         ),
                       ),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: engine.totalStorageBytes > 0 ? (1.0 - (engine.freeStorageBytes / engine.totalStorageBytes)) : 0.0,
-                          backgroundColor: const Color(0xFF263342),
-                          color: engine.isStorageLow ? const Color(0xFFFF4444) : const Color(0xFF00E676),
-                          minHeight: 7,
-                        ),
-                      )
                     ],
                   ),
                 ),
@@ -308,7 +463,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             final isApk = item.name.toLowerCase().endsWith('.apk');
 
                             return InkWell(
-                              onTap: isDone ? () => _openDownloadedFile(item.name) : null,
+                              onTap: isDone ? () => _openDownloadedFile(item) : null,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: const BoxDecoration(
@@ -350,7 +505,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                               minimumSize: Size.zero,
                                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                             ),
-                                            onPressed: () => _openDownloadedFile(item.name),
+                                            onPressed: () => _openDownloadedFile(item),
                                             icon: Icon(isApk ? Icons.system_update : Icons.play_arrow, size: 14, color: Colors.white),
                                             label: Text(isApk ? "သွင်းမည်" : "ဖွင့်မည်", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                           ),
