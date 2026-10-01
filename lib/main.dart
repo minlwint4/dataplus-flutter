@@ -35,6 +35,49 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
+  Widget _buildSlimTabItem({
+    required int index,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _currentIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _currentIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF238636).withOpacity(0.25) : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF238636) : Colors.transparent,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isSelected ? const Color(0xFF00E676) : const Color(0xFF8B949E),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? Colors.white : const Color(0xFF8B949E),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -45,16 +88,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           const DownloaderScreen(),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        backgroundColor: const Color(0xFF1E232B),
-        selectedItemColor: const Color(0xFF00E676),
-        unselectedItemColor: const Color(0xFF8B949E),
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.movie_creation_outlined), label: 'DATA PLUS'),
-          BottomNavigationBarItem(icon: Icon(Icons.download_rounded), label: 'Downloader'),
-        ],
+      // 🚀 Icon နှင့် စာတန်း ဘေးချင်းကပ် တစ်ကြောင်းတည်းဖြစ်သော Ultra-Slim Bottom Bar
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+          decoration: const BoxDecoration(
+            color: Color(0xFF141920),
+            border: Border(top: BorderSide(color: Color(0xFF21262D), width: 0.8)),
+          ),
+          child: Row(
+            children: [
+              _buildSlimTabItem(index: 0, icon: Icons.movie_creation_outlined, label: 'DATA PLUS'),
+              const SizedBox(width: 8),
+              _buildSlimTabItem(index: 1, icon: Icons.download_rounded, label: 'Downloader'),
+            ],
+          ),
+        ),
       ),
     );
   }
