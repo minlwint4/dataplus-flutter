@@ -79,10 +79,12 @@ jobs:
 
         sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
 
+        # ⚡ Phone Storage နှင့် SD Card တိုင်းတာပေးမည့် Native Kotlin Bridge
         mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
         printf '%s\n' \
           'package com.example.dataplus_app' \
           '' \
+          'import android.os.Build' \
           'import android.os.Environment' \
           'import android.os.StatFs' \
           'import io.flutter.embedding.android.FlutterActivity' \
@@ -96,14 +98,38 @@ jobs:
           '        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->' \
           '            if (call.method == "getStorageSpace") {' \
           '                try {' \
-          '                    val path = Environment.getExternalStorageDirectory()' \
-          '                    val stat = StatFs(path.path)' \
-          '                    val blockSize = stat.blockSizeLong' \
-          '                    val totalBlocks = stat.blockCountLong' \
-          '                    val availableBlocks = stat.availableBlocksLong' \
-          '                    val map = HashMap<String, Long>()' \
-          '                    map["total"] = totalBlocks * blockSize' \
-          '                    map["free"] = availableBlocks * blockSize' \
+          '                    val map = HashMap<String, Any>()' \
+          '                    val internalPath = Environment.getExternalStorageDirectory()' \
+          '                    val internalStat = StatFs(internalPath.path)' \
+          '                    val intBlockSize = internalStat.blockSizeLong' \
+          '                    map["total"] = internalStat.blockCountLong * intBlockSize' \
+          '                    map["free"] = internalStat.availableBlocksLong * intBlockSize' \
+          '' \
+          '                    val externalDirs = getExternalFilesDirs(null)' \
+          '                    var sdFound = false' \
+          '                    if (externalDirs.size > 1 && externalDirs[1] != null) {' \
+          '                        val sdFile = externalDirs[1]' \
+          '                        val isRemovable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {' \
+          '                            Environment.isExternalStorageRemovable(sdFile)' \
+          '                        } else { true }' \
+          '                        if (isRemovable) {' \
+          '                            try {' \
+          '                                val sdStat = StatFs(sdFile.path)' \
+          '                                val sdBlockSize = sdStat.blockSizeLong' \
+          '                                map["sdTotal"] = sdStat.blockCountLong * sdBlockSize' \
+          '                                map["sdFree"] = sdStat.availableBlocksLong * sdBlockSize' \
+          '                                map["sdPath"] = sdFile.absolutePath' \
+          '                                map["sdAvailable"] = true' \
+          '                                sdFound = true' \
+          '                            } catch (e: Exception) {}' \
+          '                        }' \
+          '                    }' \
+          '                    if (!sdFound) {' \
+          '                        map["sdAvailable"] = false' \
+          '                        map["sdTotal"] = 0L' \
+          '                        map["sdFree"] = 0L' \
+          '                        map["sdPath"] = ""' \
+          '                    }' \
           '                    result.success(map)' \
           '                } catch (e: Exception) {' \
           '                    result.error("ERROR", e.message, null)' \
@@ -118,7 +144,6 @@ jobs:
     - name: Install Dependencies
       run: flutter pub get
 
-    # ⚡ icon.png ကို assets ထဲ အလိုအလျောက် ရွှေ့ပြီး App Launcher Icon အဖြစ် ပြောင်းလဲပေးမည့်အဆင့်
     - name: Generate App Launcher Icons
       run: |
         mkdir -p assets
