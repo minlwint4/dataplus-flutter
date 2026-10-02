@@ -18,7 +18,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   final DownloadEngine _engine = DownloadEngine();
   bool _isLoading = true;
 
-  // 📁 ဖုန်းထဲတွင် User Name အမြဲတမ်း သိမ်းထားမည့် ဖိုင်လမ်းကြောင်း
   static const String _userNameFilePath = '/storage/emulated/0/Download/DataPlus/user_name.txt';
 
   @override
@@ -27,7 +26,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _initWebView();
   }
 
-  // 💾 User Name ကို ဖိုင်ထဲသို့ အမြဲတမ်း သိမ်းဆည်းခြင်း
   Future<void> _saveUserNamePermanently(String name) async {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return;
@@ -41,7 +39,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     } catch (_) {}
   }
 
-  // 📖 ဖိုင်ထဲမှ User Name ကို ပြန်ဖတ်ယူခြင်း
   Future<String?> _getSavedUserName() async {
     try {
       final file = File(_userNameFilePath);
@@ -53,7 +50,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     return null;
   }
 
-  // 📥 ဝဘ်ဆိုက်မှ ရောက်လာသော Download Link များကို Queue ထဲထည့်ပြီး Downloader Tab သို့ တန်းပြောင်းခြင်း
   void _processIncomingDownloadLinks(String payload) {
     if (payload.trim().isEmpty) return;
 
@@ -73,7 +69,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
     if (urls.isNotEmpty) {
       _engine.addUrls(urls);
-      // 🚀 Downloader Tab (Index 1) သို့ ချက်ချင်း ကူးပြောင်းပေးခြင်း
       widget.onTabChangeRequested?.call(1);
     }
   }
@@ -82,7 +77,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0A0A0A))
-      // 👤 User Name သိမ်းမည့် Channel
       ..addJavaScriptChannel(
         'DataPlusUserBridge',
         onMessageReceived: (JavaScriptMessage message) {
@@ -92,7 +86,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           }
         },
       )
-      // 🚀 ဒေါင်းလုဒ် Link များကို လက်ခံမည့် Channel
       ..addJavaScriptChannel(
         'DataPlusDownloadBridge',
         onMessageReceived: (JavaScriptMessage message) {
@@ -103,9 +96,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) {
             final url = request.url;
-            final uri = Uri.tryParse(url);
-
-            // intent:// သို့မဟုတ် dataplus:// စသော Link များကို ကြားဖြတ်ဖမ်းယူခြင်း
             if (url.startsWith('dataplus://') || url.startsWith('intent://')) {
               final matches = RegExp(r'https?://[^\s;"]+').allMatches(url);
               if (matches.isNotEmpty) {
@@ -117,17 +107,15 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             return NavigationDecision.navigate;
           },
           onPageStarted: (String url) {
-            // ⚡ Page ကူးတိုင်း အဝိုင်းကြီး အုပ်မထားတော့ဘဲ Browser ကဲ့သို့ ချောမွေ့စွာ တန်းပြောင်းစေခြင်း
+            // ⚡ Page အသစ်ကူးတိုင်း မျက်နှာပြင်တစ်ခုလုံးကို Loading အဝိုင်းဖြင့် မအုပ်တော့ပါ
           },
           onPageFinished: (String url) async {
             if (_isLoading) {
               setState(() => _isLoading = false);
             }
 
-            // ⚡ ၁။ ဝဘ်ဆိုက်ပေါ်ရှိ User Name နှင့် Clipboard Copy Hook များ ထည့်သွင်းခြင်း
             await _controller.runJavaScript('''
               (function() {
-                // 1. User Name စောင့်ကြည့်ခြင်း
                 var origSetItem = localStorage.setItem;
                 localStorage.setItem = function(key, val) {
                   origSetItem.apply(this, arguments);
@@ -136,7 +124,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   }
                 };
 
-                // 2. Clipboard သို့ Link များ Copy ကူးလိုက်သည်နှင့် App ထံ တိုက်ရိုက် သတင်းပို့ခြင်း
                 if (navigator.clipboard) {
                   var origWriteText = navigator.clipboard.writeText;
                   navigator.clipboard.writeText = function(text) {
@@ -147,7 +134,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   };
                 }
 
-                // 3. document.execCommand('copy') ဖြင့် ကူးယူခြင်းများကိုပါ ဖမ်းယူခြင်း
                 var origExec = document.execCommand;
                 document.execCommand = function(cmd) {
                   if (cmd === 'copy') {
@@ -167,7 +153,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   return origExec ? origExec.apply(document, arguments) : true;
                 };
 
-                // 4. "ဖွင့်မည်" သို့မဟုတ် ဒေါင်းလုဒ် ခလုတ်များကို နှိပ်သည့်အခါ Link များ ရှာဖွေပေးပို့ခြင်း
                 document.addEventListener('click', function(e) {
                   var target = e.target.closest('button, a, div, input');
                   if (!target) return;
@@ -186,7 +171,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               })();
             ''');
 
-            // ⚡ ၂။ သိမ်းဆည်းထားသော User Name ရှိပါက Auto-Restore ပြုလုပ်ခြင်း
             final savedName = await _getSavedUserName();
             if (savedName != null && savedName.isNotEmpty) {
               await _controller.runJavaScript('''
