@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'screens/web_portal_screen.dart';
@@ -5,7 +6,11 @@ import 'screens/downloader_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await [Permission.storage].request();
+  if (Platform.isAndroid) {
+    if (!await Permission.storage.isGranted) {
+      await Permission.storage.request();
+    }
+  }
   runApp(const DataPlusApp());
 }
 
@@ -88,7 +93,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           const DownloaderScreen(),
         ],
       ),
-      // 🚀 Icon နှင့် စာတန်း ဘေးချင်းကပ် တစ်ကြောင်းတည်းဖြစ်သော Ultra-Slim Bottom Bar
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
