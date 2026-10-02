@@ -50,25 +50,39 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     return null;
   }
 
+  // 📥 ရောက်လာသော Download Link များကို Downloader Engine ထဲ ထည့်သွင်းခြင်း
   void _processIncomingDownloadLinks(String payload) {
     if (payload.trim().isEmpty) return;
 
-    List<String> urls = [];
+    List<String> rawUrls = [];
     try {
       final decoded = jsonDecode(payload);
       if (decoded is List) {
-        urls = decoded.map((e) => e.toString().trim()).where((u) => u.startsWith('http')).toList();
+        rawUrls = decoded.map((e) => e.toString().trim()).where((u) => u.isNotEmpty).toList();
       }
     } catch (_) {
-      urls = payload
+      rawUrls = payload
           .split(RegExp(r'[\r\n,]+'))
           .map((e) => e.trim())
-          .where((u) => u.startsWith('http'))
+          .where((u) => u.isNotEmpty)
           .toList();
     }
 
-    if (urls.isNotEmpty) {
-      _engine.addUrls(urls);
+    // လိပ်စာ အပြည့်အစုံ (Absolute URL) ဖြစ်အောင် ပြုပြင်ခြင်း
+    List<String> finalUrls = rawUrls.map((u) {
+      if (!u.startsWith('http')) {
+        if (u.startsWith('/')) {
+          return 'http://10.10.10.10:1000$u';
+        } else {
+          return 'http://10.10.10.10:1000/$u';
+        }
+      }
+      return u;
+    }).where((u) => u.startsWith('http')).toList();
+
+    if (finalUrls.isNotEmpty) {
+      _engine.addUrls(finalUrls);
+      // 🚀 Downloader Tab (Index 1) သို့ ချက်ချင်း ခုန်ကူးပြောင်းပေးခြင်း
       widget.onTabChangeRequested?.call(1);
     }
   }
@@ -77,6 +91,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0A0A0A))
+      // 👤 User Name သိမ်းမည့် Bridge
       ..addJavaScriptChannel(
         'DataPlusUserBridge',
         onMessageReceived: (JavaScriptMessage message) {
@@ -86,6 +101,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           }
         },
       )
+      // 🚀 ဒေါင်းလုဒ် Link များကို လက်ခံမည့် Bridge
       ..addJavaScriptChannel(
         'DataPlusDownloadBridge',
         onMessageReceived: (JavaScriptMessage message) {
@@ -96,6 +112,16 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) {
             final url = request.url;
+
+            // ⚡ ၁။ "app သွင်းမယ်" APK Link သို့မဟုတ် ဖိုင်ဒေါင်းလုဒ် Link များကို ကြားဖြတ်ဖမ်းယူပြီး Downloader သို့ ပို့ပေးခြင်း
+            if (url.contains('/api/download/apk') ||
+                url.toLowerCase().contains('.apk') ||
+                url.contains('/api/download/file')) {
+              _processIncomingDownloadLinks(url);
+              return NavigationDecision.prevent;
+            }
+
+            // ⚡ ၂။ intent:// နှင့် dataplus:// Link များကို ကြားဖြတ်ဖမ်းယူခြင်း
             if (url.startsWith('dataplus://') || url.startsWith('intent://')) {
               final matches = RegExp(r'https?://[^\s;"]+').allMatches(url);
               if (matches.isNotEmpty) {
@@ -107,7 +133,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             return NavigationDecision.navigate;
           },
           onPageStarted: (String url) {
-            // ⚡ Page အသစ်ကူးတိုင်း မျက်နှာပြင်တစ်ခုလုံးကို Loading အဝိုင်းဖြင့် မအုပ်တော့ပါ
+            // Page ကူးတိုင်း Loading အဝိုင်းမပြတော့ပါ
           },
           onPageFinished: (String url) async {
             if (_isLoading) {
@@ -116,6 +142,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
             await _controller.runJavaScript('''
               (function() {
+                // 1. User Name စောင့်ကြည့်မှတ်သားခြင်း
                 var origSetItem = localStorage.setItem;
                 localStorage.setItem = function(key, val) {
                   origSetItem.apply(this, arguments);
@@ -124,6 +151,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   }
                 };
 
+                // 2. Clipboard သို့ Link Copy ကူးခြင်းများကို ဖမ်းယူခြင်း
                 if (navigator.clipboard) {
                   var origWriteText = navigator.clipboard.writeText;
                   navigator.clipboard.writeText = function(text) {
@@ -134,6 +162,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   };
                 }
 
+                // 3. execCommand('copy') ဖမ်းယူခြင်း
                 var origExec = document.execCommand;
                 document.execCommand = function(cmd) {
                   if (cmd === 'copy') {
@@ -153,11 +182,21 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   return origExec ? origExec.apply(document, arguments) : true;
                 };
 
+                // 4. "app သွင်းမယ်" နှင့် ဒေါင်းလုဒ် ခလုတ်များကို နှိပ်လိုက်သည်နှင့် Downloader ထံ ချက်ချင်း ပို့ပေးခြင်း
                 document.addEventListener('click', function(e) {
+                  var a = e.target.closest('a');
+                  if (a && a.href && (a.href.indexOf('/api/download/apk') !== -1 || a.href.indexOf('.apk') !== -1)) {
+                    e.preventDefault();
+                    if (window.DataPlusDownloadBridge) {
+                      window.DataPlusDownloadBridge.postMessage(a.href);
+                    }
+                    return;
+                  }
+
                   var target = e.target.closest('button, a, div, input');
                   if (!target) return;
                   var txt = (target.innerText || target.value || '').toLowerCase();
-                  if (txt.includes('ဖွင့်') || txt.includes('app') || txt.includes('download') || txt.includes('ဒေါင်း')) {
+                  if (txt.includes('ဖွင့်') || txt.includes('app') || txt.includes('download') || txt.includes('ဒေါင်း') || txt.includes('သွင်း')) {
                     setTimeout(function() {
                       var ta = document.querySelector('textarea');
                       if (ta && ta.value && ta.value.indexOf('http') !== -1) {
@@ -171,6 +210,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               })();
             ''');
 
+            // User Name အလိုအလျောက် ပြန်ထည့်ပေးခြင်း
             final savedName = await _getSavedUserName();
             if (savedName != null && savedName.isNotEmpty) {
               await _controller.runJavaScript('''
