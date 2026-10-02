@@ -117,10 +117,12 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             return NavigationDecision.navigate;
           },
           onPageStarted: (String url) {
-            setState(() => _isLoading = true);
+            // ⚡ Page ကူးတိုင်း အဝိုင်းကြီး အုပ်မထားတော့ဘဲ Browser ကဲ့သို့ ချောမွေ့စွာ တန်းပြောင်းစေခြင်း
           },
           onPageFinished: (String url) async {
-            setState(() => _isLoading = false);
+            if (_isLoading) {
+              setState(() => _isLoading = false);
+            }
 
             // ⚡ ၁။ ဝဘ်ဆိုက်ပေါ်ရှိ User Name နှင့် Clipboard Copy Hook များ ထည့်သွင်းခြင်း
             await _controller.runJavaScript('''
