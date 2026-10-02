@@ -115,7 +115,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     );
   }
 
-  // 🚀 Finish ထဲတွင် ဖိုင်ဖျက်သည့်အခါ "With file" Checkbox ပါသော Dialog
   Future<void> _confirmDeleteFinished({
     required List<DownloadItem> items,
     required String title,
@@ -197,7 +196,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  // 🚀 Permission ထပ်မတောင်းဘဲ ဖိုင်ကို Native စနစ်ဖြင့် တိုက်ရိုက်ဖွင့်ခြင်း
   Future<void> _openDownloadedFile(DownloadItem item) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
@@ -329,6 +327,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
         final isInternalActive = engine.storageTarget == 'internal';
         final isSdActive = engine.storageTarget == 'sdcard';
+
+        final isQueueTab = currentTab == 'Queue';
 
         return Scaffold(
           backgroundColor: const Color(0xFF101317),
@@ -499,7 +499,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 ),
 
                 // 🚀 Queue Start/Pause Banner
-                if (currentTab == 'Queue' && qCount > 0)
+                if (isQueueTab && qCount > 0)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     child: engine.isDownloading
@@ -530,18 +530,40 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                   ),
 
-                // 📋 Contextual Action Bar
-                if (currentList.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                    color: const Color(0xFF141A22),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "$currentTab (${currentList.length})",
-                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
+                // 🌟 Queue နှင့် Finished ကို ရှင်းလင်းစွာ ခွဲခြားပြသမည့် Distinct Status Header
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isQueueTab ? const Color(0xFF0C1929) : const Color(0xFF0D2418),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: isQueueTab ? const Color(0xFF1D4ED8) : const Color(0xFF059669),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            isQueueTab ? Icons.hourglass_top_rounded : Icons.check_circle_rounded,
+                            size: 14,
+                            color: isQueueTab ? const Color(0xFF38BDF8) : const Color(0xFF00E676),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            isQueueTab ? "QUEUE (ဆိုင်းငံ့စာရင်း - $qCount)" : "FINISHED (ပြီးစီးစာရင်း - $fCount)",
+                            style: TextStyle(
+                              color: isQueueTab ? const Color(0xFF38BDF8) : const Color(0xFF00E676),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (currentList.isNotEmpty)
                         Row(
                           children: [
                             InkWell(
@@ -553,10 +575,14 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 setState(() {});
                               },
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                 child: Text(
-                                  selectedList.length == currentList.length ? 'None' : 'Select All',
-                                  style: const TextStyle(color: Color(0xFF58A6FF), fontSize: 11, fontWeight: FontWeight.bold),
+                                  selectedList.length == currentList.length ? 'None' : 'All',
+                                  style: TextStyle(
+                                    color: isQueueTab ? const Color(0xFF93C5FD) : const Color(0xFF86EFAC),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
@@ -564,14 +590,14 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             if (selectedList.isNotEmpty)
                               InkWell(
                                 onTap: () {
-                                  if (currentTab == 'Finished') {
-                                    _confirmDeleteFinished(items: selectedList, title: "ရွေးချယ်ထားသော ဖိုင်များ ဖျက်မည်");
+                                  if (!isQueueTab) {
+                                    _confirmDeleteFinished(items: selectedList, title: "ရွေးထားသော ဖိုင်များ ဖျက်မည်");
                                   } else {
                                     engine.deleteSelected(selectedList);
                                   }
                                 },
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                                   decoration: BoxDecoration(color: const Color(0xFFB91C1C), borderRadius: BorderRadius.circular(4)),
                                   child: Text('Delete (${selectedList.length})', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                                 ),
@@ -579,27 +605,43 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             else
                               InkWell(
                                 onTap: () {
-                                  if (currentTab == 'Finished') {
+                                  if (!isQueueTab) {
                                     _confirmDeleteFinished(items: currentList, title: "Finished ဖိုင်များ အားလုံး ဖျက်မည်");
                                   } else {
                                     engine.removeAll(currentTab);
                                   }
                                 },
                                 child: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                   child: Text('Clear All', style: TextStyle(color: Color(0xFFF85149), fontSize: 11, fontWeight: FontWeight.bold)),
                                 ),
                               ),
                           ],
                         )
-                      ],
-                    ),
+                    ],
                   ),
+                ),
 
                 // 📋 List View
                 Expanded(
                   child: currentList.isEmpty
-                      ? Center(child: Text("No $currentTab items", style: const TextStyle(color: Color(0xFF484F58), fontSize: 13)))
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isQueueTab ? Icons.downloading_outlined : Icons.folder_open_outlined,
+                                size: 36,
+                                color: const Color(0xFF30363D),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                isQueueTab ? "Queue ထဲတွင် ဒေါင်းလုဒ်ဖိုင် မရှိပါ" : "ဒေါင်းပြီးစီးသောဖိုင် မရှိသေးပါ",
+                                style: const TextStyle(color: Color(0xFF6E7681), fontSize: 12.5),
+                              ),
+                            ],
+                          ),
+                        )
                       : ListView.builder(
                           itemCount: currentList.length,
                           itemBuilder: (context, index) {
@@ -613,9 +655,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                               onTap: isDone ? () => _openDownloadedFile(item) : null,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF101317),
-                                  border: Border(bottom: BorderSide(color: Color(0xFF1E232B), width: 0.6)),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF101317),
+                                  // 🌟 Finished တွင် အစိမ်းရောင် ဘယ်ဘက် အနားသတ်လိုင်း ထည့်ထားပါသည်
+                                  border: Border(
+                                    bottom: const BorderSide(color: Color(0xFF1E232B), width: 0.6),
+                                    left: isDone
+                                        ? const BorderSide(color: Color(0xFF00E676), width: 3.0)
+                                        : BorderSide.none,
+                                  ),
                                 ),
                                 child: Column(
                                   children: [
@@ -626,7 +674,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                           height: 24,
                                           child: Checkbox(
                                             value: item.isSelected,
-                                            activeColor: const Color(0xFF2563EB),
+                                            activeColor: isDone ? const Color(0xFF00E676) : const Color(0xFF2563EB),
                                             onChanged: (v) => setState(() => item.isSelected = v ?? false),
                                           ),
                                         ),
@@ -663,7 +711,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                           ),
                                         InkWell(
                                           onTap: () {
-                                            if (currentTab == 'Finished') {
+                                            if (!isQueueTab) {
                                               _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်မည်");
                                             } else {
                                               engine.deleteItem(item);
@@ -713,10 +761,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                 ),
 
-                // 🔻 ADM Bottom Bar
+                // 🔻 ADM Bottom Bar (Active Tab Pill Highlight စနစ်)
                 Container(
                   color: const Color(0xFF1E232B),
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -738,36 +786,62 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                         onPressed: _showAddLinksDialog,
                       ),
+
+                      // 🌟 Queue Button (Active ဖြစ်ပါက အပြာရောင် Pill အဖြစ် တောက်ပနေမည်)
                       InkWell(
                         onTap: () => setState(() => currentTab = 'Queue'),
-                        child: Row(
-                          children: [
-                            Icon(Icons.access_time, color: currentTab == 'Queue' ? const Color(0xFF58A6FF) : const Color(0xFF8B949E), size: 17),
-                            const SizedBox(width: 4),
-                            Text("Queue", style: TextStyle(color: currentTab == 'Queue' ? const Color(0xFF58A6FF) : const Color(0xFF8B949E), fontWeight: FontWeight.bold, fontSize: 12)),
-                            const SizedBox(width: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(color: qCount > 0 ? const Color(0xFF2563EB) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(8)),
-                              child: Text("$qCount", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                            )
-                          ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isQueueTab ? const Color(0xFF162D4A) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isQueueTab ? const Color(0xFF38BDF8) : Colors.transparent,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.access_time_filled, color: isQueueTab ? const Color(0xFF38BDF8) : const Color(0xFF8B949E), size: 16),
+                              const SizedBox(width: 4),
+                              Text("Queue", style: TextStyle(color: isQueueTab ? Colors.white : const Color(0xFF8B949E), fontWeight: isQueueTab ? FontWeight.bold : FontWeight.normal, fontSize: 12)),
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(color: isQueueTab ? const Color(0xFF2563EB) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(8)),
+                                child: Text("$qCount", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              )
+                            ],
+                          ),
                         ),
                       ),
+
+                      // 🌟 Finished Button (Active ဖြစ်ပါက အစိမ်းရောင် Pill အဖြစ် တောက်ပနေမည်)
                       InkWell(
                         onTap: () => setState(() => currentTab = 'Finished'),
-                        child: Row(
-                          children: [
-                            Icon(Icons.check_circle, color: currentTab == 'Finished' ? const Color(0xFF00E676) : const Color(0xFF8B949E), size: 17),
-                            const SizedBox(width: 4),
-                            Text("Finished", style: TextStyle(color: currentTab == 'Finished' ? const Color(0xFF00E676) : const Color(0xFF8B949E), fontWeight: FontWeight.bold, fontSize: 12)),
-                            const SizedBox(width: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(color: fCount > 0 ? const Color(0xFF238636) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(8)),
-                              child: Text("$fCount", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                            )
-                          ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: !isQueueTab ? const Color(0xFF123524) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: !isQueueTab ? const Color(0xFF00E676) : Colors.transparent,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle, color: !isQueueTab ? const Color(0xFF00E676) : const Color(0xFF8B949E), size: 16),
+                              const SizedBox(width: 4),
+                              Text("Finished", style: TextStyle(color: !isQueueTab ? Colors.white : const Color(0xFF8B949E), fontWeight: !isQueueTab ? FontWeight.bold : FontWeight.normal, fontSize: 12)),
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(color: !isQueueTab ? const Color(0xFF238636) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(8)),
+                                child: Text("$fCount", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              )
+                            ],
+                          ),
                         ),
                       ),
                     ],
