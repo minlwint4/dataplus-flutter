@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import '../services/download_engine.dart';
+import '../main.dart'; // 🚀 Version & Update Checker ခေါ်ယူရန်
 
 class DownloaderScreen extends StatefulWidget {
   const DownloaderScreen({super.key});
@@ -43,6 +44,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
+  // ⚙️ Storage & App Update Settings Dialog
   void _showStorageSettingDialog() {
     showDialog(
       context: context,
@@ -54,24 +56,28 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
               children: [
                 Icon(Icons.settings_suggest, color: Color(0xFF58A6FF), size: 22),
                 SizedBox(width: 8),
-                Text("ဒေါင်းလုဒ် သိမ်းဆည်းမည့်နေရာ", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                Text("Settings & Update", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
               ],
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text("ဒေါင်းလုဒ် သိမ်းဆည်းမည့်နေရာ:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
                 RadioListTile<String>(
                   value: 'internal',
                   groupValue: engine.storageTarget,
                   activeColor: const Color(0xFF00E676),
-                  title: const Text("📱 ဖုန်း Storage (Internal)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text("📱 ဖုန်း Storage (Internal)", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
                   subtitle: Text("လက်ကျန်: ${_formatBytes(engine.freeStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                   onChanged: (val) {
                     if (val != null) {
                       engine.setStorageTarget(val);
                       setModalState(() {});
                       setState(() {});
-                      Navigator.pop(ctx);
                     }
                   },
                 ),
@@ -79,9 +85,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   value: 'sdcard',
                   groupValue: engine.storageTarget,
                   activeColor: const Color(0xFF00E676),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
                   title: Row(
                     children: [
-                      const Text("💾 SD ကတ် (Memory Card)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      const Text("💾 SD ကတ် (Memory Card)", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
                       if (!engine.isSdAvailable)
                         const Text(" (မရှိပါ)", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
                     ],
@@ -96,10 +104,37 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             engine.setStorageTarget(val);
                             setModalState(() {});
                             setState(() {});
-                            Navigator.pop(ctx);
                           }
                         }
                       : null,
+                ),
+                const Divider(color: Color(0xFF30363D), height: 18),
+
+                // 🚀 App Version & Check Update Button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("App Version", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        Text("v$kAppVersion", style: const TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                      ],
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF238636),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        MainNavigationScreen.checkLocalServerUpdate(context, isManual: true);
+                      },
+                      icon: const Icon(Icons.refresh, size: 14, color: Colors.white),
+                      label: const Text("Update စစ်မည်", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    )
+                  ],
                 ),
               ],
             ),
@@ -530,7 +565,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                   ),
 
-                // 🌟 Queue နှင့် Finished ကို ရှင်းလင်းစွာ ခွဲခြားပြသမည့် Distinct Status Header
+                // 🌟 Queue / Finished Distinct Header
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -657,7 +692,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF101317),
-                                  // 🌟 Finished တွင် အစိမ်းရောင် ဘယ်ဘက် အနားသတ်လိုင်း ထည့်ထားပါသည်
                                   border: Border(
                                     bottom: const BorderSide(color: Color(0xFF1E232B), width: 0.6),
                                     left: isDone
@@ -761,7 +795,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                 ),
 
-                // 🔻 ADM Bottom Bar (Active Tab Pill Highlight စနစ်)
+                // 🔻 Bottom Bar
                 Container(
                   color: const Color(0xFF1E232B),
                   padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -775,7 +809,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.settings, color: Color(0xFF58A6FF), size: 21),
-                        tooltip: "Storage Settings",
+                        tooltip: "Settings",
                         onPressed: _showStorageSettingDialog,
                       ),
                       IconButton(
@@ -786,8 +820,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                         onPressed: _showAddLinksDialog,
                       ),
-
-                      // 🌟 Queue Button (Active ဖြစ်ပါက အပြာရောင် Pill အဖြစ် တောက်ပနေမည်)
                       InkWell(
                         onTap: () => setState(() => currentTab = 'Queue'),
                         child: Container(
@@ -815,8 +847,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                         ),
                       ),
-
-                      // 🌟 Finished Button (Active ဖြစ်ပါက အစိမ်းရောင် Pill အဖြစ် တောက်ပနေမည်)
                       InkWell(
                         onTap: () => setState(() => currentTab = 'Finished'),
                         child: Container(
