@@ -43,7 +43,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // ⚙️ Storage ရွေးချယ်မည့် Setting Dialog
   void _showStorageSettingDialog() {
     showDialog(
       context: context,
@@ -116,12 +115,97 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     );
   }
 
+  // 🚀 Finish ထဲတွင် ဖိုင်ဖျက်သည့်အခါ "With file" Checkbox ပါသော Dialog
+  Future<void> _confirmDeleteFinished({
+    required List<DownloadItem> items,
+    required String title,
+  }) async {
+    bool deleteActualFile = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E232B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          title: Row(
+            children: [
+              const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 22),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                items.length == 1
+                    ? "'${items.first.name}' ကို ဖျက်ရန် သေချာပါသလား?"
+                    : "ရွေးချယ်ထားသော (${items.length}) ဖိုင်ကို ဖျက်ရန် သေချာပါသလား?",
+                style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141A22),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF30363D)),
+                ),
+                child: CheckboxListTile(
+                  value: deleteActualFile,
+                  activeColor: const Color(0xFFF85149),
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  title: const Text(
+                    "With file (ဖိုင်ပါ အပြီးဖျက်မည်)",
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    "အမှန်ခြစ်ပါက ဖုန်း/SD ထဲမှ မူရင်းဖိုင်ပါ အပြီးတိုင် ဖျက်ပစ်ပါမည်",
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
+                  ),
+                  onChanged: (val) {
+                    setDialogState(() {
+                      deleteActualFile = val ?? false;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("မဖျက်ပါ", style: TextStyle(color: Color(0xFF8B949E))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB91C1C),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("ဖျက်မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      engine.deleteFinishedItems(items, deleteActualFile: deleteActualFile);
+      setState(() {});
+    }
+  }
+
+  // 🚀 Permission ထပ်မတောင်းဘဲ ဖိုင်ကို Native စနစ်ဖြင့် တိုက်ရိုက်ဖွင့်ခြင်း
   Future<void> _openDownloadedFile(DownloadItem item) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
 
     if (!await file.exists()) {
-      final altFolder = (folder == DownloadEngine.internalDownloadPath) ? '${engine.sdDownloadPath}/DataPlus' : DownloadEngine.internalDownloadPath;
+      final altFolder = (folder == DownloadEngine.internalDownloadPath)
+          ? '${engine.sdDownloadPath}/DataPlus'
+          : DownloadEngine.internalDownloadPath;
       final altFile = File('$altFolder/${item.name}');
       if (await altFile.exists()) {
         file = altFile;
@@ -133,19 +217,29 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       }
     }
 
-    String? type;
+    String mimeType = '*/*';
     final lower = item.name.toLowerCase();
     if (lower.endsWith('.apk')) {
-      type = 'application/vnd.android.package-archive';
+      mimeType = 'application/vnd.android.package-archive';
     } else if (lower.endsWith('.mp4')) {
-      type = 'video/mp4';
+      mimeType = 'video/mp4';
     } else if (lower.endsWith('.mkv')) {
-      type = 'video/*';
+      mimeType = 'video/x-matroska';
+    } else if (lower.endsWith('.avi')) {
+      mimeType = 'video/x-msvideo';
     }
 
-    final result = await OpenFilex.open(file.path, type: type);
-    if (result.type != ResultType.done && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ ${result.message}')));
+    try {
+      const channel = MethodChannel('com.dataplus/storage');
+      await channel.invokeMethod('openFile', {
+        'path': file.path,
+        'mimeType': mimeType,
+      });
+    } catch (_) {
+      final result = await OpenFilex.open(file.path, type: mimeType);
+      if (result.type != ResultType.done && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ ${result.message}')));
+      }
     }
   }
 
@@ -241,7 +335,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 💾 ဖုန်း STORAGE နှင့် SD ကတ် (Ultra-Compact Slim Card - အပေါ်ဆုံးမှ တန်းစတင်ပါသည်)
+                // 💾 ဖုန်း STORAGE နှင့် SD ကတ် Slim Card
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -257,7 +351,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     children: [
                       Row(
                         children: [
-                          // 📱 ဘယ်ဘက်ကွက်: ဖုန်း Storage
                           Expanded(
                             child: InkWell(
                               onTap: () => engine.setStorageTarget('internal'),
@@ -314,7 +407,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                           const SizedBox(width: 6),
 
-                          // 💾 ညာဘက်ကွက်: SD ကတ်
                           Expanded(
                             child: InkWell(
                               onTap: engine.isSdAvailable ? () => engine.setStorageTarget('sdcard') : null,
@@ -334,7 +426,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                         Row(
                                           children: [
                                             Icon(Icons.sd_card, color: engine.isSdAvailable ? const Color(0xFF38BDF8) : const Color(0xFF6E7681), size: 13),
-                                            const SizedBox(width: 3),
+                                            SizedBox(width: 3),
                                             const Text("SD ကတ်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
                                           ],
                                         ),
@@ -377,7 +469,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ],
                       ),
 
-                      // ဒေါင်းလုဒ် အရွယ်အစား & Warning (Slim Strip)
                       Container(
                         width: double.infinity,
                         margin: const EdgeInsets.only(top: 5),
@@ -407,7 +498,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // 🚀 Queue Start/Pause Banner (Queue ထဲ ဖိုင်ရှိမှသာ ပေါ်မည်)
+                // 🚀 Queue Start/Pause Banner
                 if (currentTab == 'Queue' && qCount > 0)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -439,7 +530,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                   ),
 
-                // 📋 Contextual Action Bar (စာရင်းရှိမှသာ ပေါ်မည့် Select All / Delete အတန်းကျဉ်းလေး)
+                // 📋 Contextual Action Bar
                 if (currentList.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
@@ -472,7 +563,13 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             const SizedBox(width: 8),
                             if (selectedList.isNotEmpty)
                               InkWell(
-                                onTap: () => engine.deleteSelected(selectedList),
+                                onTap: () {
+                                  if (currentTab == 'Finished') {
+                                    _confirmDeleteFinished(items: selectedList, title: "ရွေးချယ်ထားသော ဖိုင်များ ဖျက်မည်");
+                                  } else {
+                                    engine.deleteSelected(selectedList);
+                                  }
+                                },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(color: const Color(0xFFB91C1C), borderRadius: BorderRadius.circular(4)),
@@ -481,7 +578,13 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                               )
                             else
                               InkWell(
-                                onTap: () => engine.removeAll(currentTab),
+                                onTap: () {
+                                  if (currentTab == 'Finished') {
+                                    _confirmDeleteFinished(items: currentList, title: "Finished ဖိုင်များ အားလုံး ဖျက်မည်");
+                                  } else {
+                                    engine.removeAll(currentTab);
+                                  }
+                                },
                                 child: const Padding(
                                   padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   child: Text('Clear All', style: TextStyle(color: Color(0xFFF85149), fontSize: 11, fontWeight: FontWeight.bold)),
@@ -493,7 +596,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     ),
                   ),
 
-                // 📋 List View (ကျစ်လျစ်သော Slim Padding ဖြင့် ဖိုင်အများအပြား မြင်နိုင်ပါသည်)
+                // 📋 List View
                 Expanded(
                   child: currentList.isEmpty
                       ? Center(child: Text("No $currentTab items", style: const TextStyle(color: Color(0xFF484F58), fontSize: 13)))
@@ -559,7 +662,13 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                             label: Text(isApk ? "သွင်းမည်" : "ဖွင့်မည်", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                                           ),
                                         InkWell(
-                                          onTap: () => engine.deleteItem(item),
+                                          onTap: () {
+                                            if (currentTab == 'Finished') {
+                                              _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်မည်");
+                                            } else {
+                                              engine.deleteItem(item);
+                                            }
+                                          },
                                           child: const Padding(
                                             padding: EdgeInsets.all(4.0),
                                             child: Icon(Icons.close, color: Color(0xFF8B949E), size: 16),
@@ -604,26 +713,23 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                 ),
 
-                // 🔻 ADM Bottom Bar (Power ➔ Settings ➔ Add ➔ Queue ➔ Finished)
+                // 🔻 ADM Bottom Bar
                 Container(
                   color: const Color(0xFF1E232B),
                   padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      // 1. Power (Exit)
                       IconButton(
                         icon: const Icon(Icons.power_settings_new, color: Color(0xFFF85149), size: 21),
                         tooltip: "Exit",
                         onPressed: () => SystemNavigator.pop(),
                       ),
-                      // 2. ⚙️ Settings (Power နှင့် + ကြားထဲ ထည့်သွင်းထားပါသည်)
                       IconButton(
                         icon: const Icon(Icons.settings, color: Color(0xFF58A6FF), size: 21),
                         tooltip: "Storage Settings",
                         onPressed: _showStorageSettingDialog,
                       ),
-                      // 3. ➕ Add Links
                       IconButton(
                         icon: Container(
                           padding: const EdgeInsets.all(5),
@@ -632,7 +738,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                         onPressed: _showAddLinksDialog,
                       ),
-                      // 4. Queue Tab
                       InkWell(
                         onTap: () => setState(() => currentTab = 'Queue'),
                         child: Row(
@@ -649,7 +754,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ],
                         ),
                       ),
-                      // 5. Finished Tab
                       InkWell(
                         onTap: () => setState(() => currentTab = 'Finished'),
                         child: Row(
