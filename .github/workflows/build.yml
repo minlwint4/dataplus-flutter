@@ -16,17 +16,51 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up Java
+    - name: Set up Java with Gradle Cache
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
+        cache: 'gradle' # ⚡ Dependency များကို Cache လုပ်ထားပြီး ထပ်ခါတလဲလဲ မဒေါင်းလုဒ်ဆွဲရစေရန်
+
+    - name: Configure Maven Central Mirror (Bypass 429 Rate Limit)
+      run: |
+        mkdir -p ~/.gradle/init.d
+        cat << 'EOF' > ~/.gradle/init.d/mirror.init.gradle
+        def mirrorUrl = "https://maven-central.storage-download.googleapis.com/maven2/"
+
+        allprojects {
+            buildscript {
+                repositories {
+                    all { ArtifactRepository repo ->
+                        if (repo instanceof MavenArtifactRepository) {
+                            def url = repo.url.toString()
+                            if (url.contains("repo.maven.apache.org") || url.contains("repo1.maven.org")) {
+                                repo.setUrl(mirrorUrl)
+                            }
+                        }
+                    }
+                }
+            }
+            repositories {
+                all { ArtifactRepository repo ->
+                    if (repo instanceof MavenArtifactRepository) {
+                        def url = repo.url.toString()
+                        if (url.contains("repo.maven.apache.org") || url.contains("repo1.maven.org")) {
+                            repo.setUrl(mirrorUrl)
+                        }
+                    }
+                }
+            }
+        }
+        EOF
 
     - name: Set up Flutter
       uses: subosito/flutter-action@v2
       with:
         flutter-version: '3.24.0'
         channel: 'stable'
+        cache: true
 
     - name: Configure Android Project & Fix Kotlin Version
       run: |
@@ -35,7 +69,6 @@ jobs:
           flutter create . --org com.example --project-name dataplus_app
         fi
 
-        # ⚡ Python ဖြင့် settings.gradle နှင့် build.gradle အားလုံးရှိ Kotlin ကို 1.9.24 သို့ အပြီးတိုင် အစားထိုးခြင်း
         python3 -c "
         import os, re
 
@@ -67,7 +100,7 @@ jobs:
                 f.write(c)
         "
 
-        # ⚡ 3. FileProvider အတွက် filepaths.xml ဖန်တီးခြင်း
+        # 3. FileProvider အတွက် filepaths.xml ဖန်တီးခြင်း
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
           '<?xml version="1.0" encoding="utf-8"?>' \
@@ -77,14 +110,14 @@ jobs:
           '    <root-path name="root" path="." />' \
           '</paths>' > android/app/src/main/res/xml/filepaths.xml
 
-        # ⚡ 4. App အမည် DATA_PLUS နှင့် လိုအပ်သော Permissions များ ထည့်သွင်းခြင်း
+        # 4. App အမည် DATA_PLUS နှင့် Permissions များ ထည့်သွင်းခြင်း
         sed -i 's/android:label="[^"]*"/android:label="DATA_PLUS"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
 
         sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
 
-        # ⚡ 5. Storage တိုင်းတာခြင်းနှင့် Permission မလိုဘဲ တိုက်ရိုက်ဖွင့်ပေးမည့် Kotlin Bridge
+        # 5. MethodChannel Kotlin Bridge
         mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
         printf '%s\n' \
           'package com.example.dataplus_app' \
@@ -191,7 +224,6 @@ jobs:
           dart run flutter_launcher_icons
         fi
 
-    # ⚡ 6. အမြဲတမ်း လက်မှတ်တူညီစေမည့် Persistent Keystore ဖြင့် Sign လုပ်ခြင်း
     - name: Ensure Persistent Release Keystore
       run: |
         if [ ! -f "dataplus.jks" ]; then
@@ -210,7 +242,6 @@ jobs:
           sed -i -E 's/signingConfig =? signingConfigs\.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
         fi
 
-    # ⚡ 7. Version အစစ်ကို Dynamic ထည့်သွင်းပြီး APK Build လုပ်ခြင်း
     - name: Build APK (Release)
       run: |
         flutter build apk --release \
