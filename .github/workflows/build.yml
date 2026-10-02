@@ -35,39 +35,35 @@ jobs:
           flutter create . --org com.example --project-name dataplus_app
         fi
 
+        # ⚡ 1. Kotlin version ကို settings.gradle ထဲတွင် 1.9.24 အဖြစ် ပြောင်းလဲခြင်း
         if [ -f "android/settings.gradle" ]; then
-          sed -i -E 's/id "org\.jetbrains\.kotlin\.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' android/settings.gradle
+          sed -i -E "s/id\s*\(?['\"]org\.jetbrains\.kotlin\.android['\"]\)?\s+version\s+['\"][^'\"]*['\"]/id \"org.jetbrains.kotlin.android\" version \"1.9.24\"/g" android/settings.gradle
         fi
 
-        printf '%s\n' \
-          'buildscript {' \
-          '    ext.kotlin_version = "1.9.24"' \
-          '    repositories {' \
-          '        google()' \
-          '        mavenCentral()' \
-          '    }' \
-          '    dependencies {' \
-          '        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24"' \
-          '    }' \
-          '}' \
-          'allprojects {' \
-          '    repositories {' \
-          '        google()' \
-          '        mavenCentral()' \
-          '    }' \
-          '    configurations.all {' \
-          '        resolutionStrategy.eachDependency { details ->' \
-          '            if (details.requested.group == "org.jetbrains.kotlin") {' \
-          '                details.useVersion "1.9.24"' \
-          '            }' \
-          '        }' \
-          '    }' \
-          '}' > android/build.gradle.prefix
+        # ⚡ 2. Kotlin version ကို root build.gradle ထဲတွင် 1.9.24 အဖြစ် အပြည့်အစုံ ပြင်ဆင်ခြင်း
+        if [ -f "android/build.gradle" ]; then
+          sed -i -E "s/ext\.kotlin_version\s*=\s*['\"][^'\"]*['\"]/ext.kotlin_version = '1.9.24'/g" android/build.gradle
+          sed -i -E "s/classpath\s+['\"]org\.jetbrains\.kotlin:kotlin-gradle-plugin:[^'\"]*['\"]/classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24'/g" android/build.gradle
 
-        cat android/build.gradle.prefix android/build.gradle > android/build.gradle.tmp
-        mv android/build.gradle.tmp android/build.gradle
-        rm -f android/build.gradle.prefix
+          if ! grep -q "ext.kotlin_version" android/build.gradle; then
+            sed -i '/buildscript\s*{/a \    ext.kotlin_version = "1.9.24"' android/build.gradle
+          fi
 
+          if ! grep -q "resolutionStrategy.eachDependency" android/build.gradle; then
+            printf '\n%s\n' \
+              'allprojects {' \
+              '    configurations.all {' \
+              '        resolutionStrategy.eachDependency { details ->' \
+              '            if (details.requested.group == "org.jetbrains.kotlin") {' \
+              '                details.useVersion "1.9.24"' \
+              '            }' \
+              '        }' \
+              '    }' \
+              '}' >> android/build.gradle
+          fi
+        fi
+
+        # ⚡ 3. FileProvider အတွက် filepaths.xml ဖန်တီးခြင်း
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
           '<?xml version="1.0" encoding="utf-8"?>' \
@@ -77,12 +73,14 @@ jobs:
           '    <root-path name="root" path="." />' \
           '</paths>' > android/app/src/main/res/xml/filepaths.xml
 
+        # ⚡ 4. App အမည် DATA_PLUS နှင့် လိုအပ်သော Permissions များ ထည့်သွင်းခြင်း
         sed -i 's/android:label="[^"]*"/android:label="DATA_PLUS"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
 
         sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
 
+        # ⚡ 5. Storage တိုင်းတာခြင်းနှင့် Permission မလိုဘဲ တိုက်ရိုက်ဖွင့်ပေးမည့် Kotlin Bridge
         mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
         printf '%s\n' \
           'package com.example.dataplus_app' \
@@ -189,7 +187,7 @@ jobs:
           dart run flutter_launcher_icons
         fi
 
-    # ⚡ Update တင်ရမရ ဖြစ်စေသည့် အဓိကအချက် (ပုံသေ Keystore တစ်ခုတည်းဖြင့် Sign လုပ်ခြင်း)
+    # ⚡ 6. အမြဲတမ်း လက်မှတ်တူညီစေမည့် Persistent Keystore ဖြင့် Sign လုပ်ခြင်း
     - name: Ensure Persistent Release Keystore
       run: |
         if [ ! -f "dataplus.jks" ]; then
@@ -203,10 +201,12 @@ jobs:
         fi
         cp dataplus.jks android/app/dataplus.jks
 
-        sed -i '/buildTypes {/i \    signingConfigs {\n        release {\n            storeFile file("dataplus.jks")\n            storePassword "dataplus123"\n            keyAlias "dataplus"\n            keyPassword "dataplus123"\n        }\n    }' android/app/build.gradle
-        sed -i -E 's/signingConfig =? signingConfigs\.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
+        if ! grep -q "signingConfigs.release" android/app/build.gradle; then
+          sed -i '/buildTypes {/i \    signingConfigs {\n        release {\n            storeFile file("dataplus.jks")\n            storePassword "dataplus123"\n            keyAlias "dataplus"\n            keyPassword "dataplus123"\n        }\n    }' android/app/build.gradle
+          sed -i -E 's/signingConfig =? signingConfigs\.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
+        fi
 
-    # ⚡ Version နံပါတ်အစစ်ကို Flutter ကုဒ်ဆီ တိုက်ရိုက်ပေးပို့ပြီး Build လုပ်ခြင်း
+    # ⚡ 7. Version အစစ်ကို Dynamic ထည့်သွင်းပြီး APK Build လုပ်ခြင်း
     - name: Build APK (Release)
       run: |
         flutter build apk --release \
