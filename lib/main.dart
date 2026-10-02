@@ -4,6 +4,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'screens/web_portal_screen.dart';
 import 'screens/downloader_screen.dart';
 
+// 🚀 GitHub Actions မှ လှမ်းပို့လိုက်သော Version နံပါတ်အစစ်ကို ဖတ်ယူခြင်း
+const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (Platform.isAndroid) {
@@ -96,7 +99,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           const DownloaderScreen(),
         ],
       ),
-      // 🚀 Version (0.0.50) ပါဝင်သော Ultra-Slim Bottom Bar
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
@@ -108,7 +110,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ),
           child: Row(
             children: [
-              _buildSlimTabItem(index: 0, icon: Icons.movie_creation_outlined, label: 'DATA PLUS (0.0.50)'),
+              _buildSlimTabItem(index: 0, icon: Icons.movie_creation_outlined, label: 'DATA PLUS ($kAppVersion)'),
               const SizedBox(width: 8),
               _buildSlimTabItem(index: 1, icon: Icons.download_rounded, label: 'Downloader'),
             ],
