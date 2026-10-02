@@ -218,6 +218,30 @@ class DownloadEngine extends ChangeNotifier {
     } catch (_) {}
   }
 
+  // 🚀 Finished ဖိုင်များကို "With file" Checkbox အတိုင်း စီမံဖျက်ခြင်း
+  void deleteFinishedItems(List<DownloadItem> items, {required bool deleteActualFile}) {
+    for (var item in items) {
+      if (deleteActualFile) {
+        final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
+        final file = File('$folder/${item.name}');
+        if (file.existsSync()) {
+          try { file.deleteSync(); } catch (_) {}
+        }
+        final altFolder = (folder == internalDownloadPath)
+            ? '$sdDownloadPath/DataPlus'
+            : internalDownloadPath;
+        final altFile = File('$altFolder/${item.name}');
+        if (altFile.existsSync()) {
+          try { altFile.deleteSync(); } catch (_) {}
+        }
+        _cleanupTempFiles(folder, item.name);
+      }
+      downloads.remove(item);
+    }
+    updateStorageInfo();
+    notifyListeners();
+  }
+
   void deleteItem(DownloadItem item) {
     item.isCanceled = true;
     item.isPaused = true;
@@ -317,17 +341,14 @@ class DownloadEngine extends ChangeNotifier {
       await probeResp.drain();
     } catch (_) {}
 
-    // APK ဖိုင် သို့မဟုတ် Range မရပါက Single Stream ဖြင့် ဒေါင်းမည်
     if (!canMultiThread || totalBytes < 5 * 1024 * 1024 || item.name.toLowerCase().endsWith('.apk')) {
       await _downloadSingleStream(item, client, totalBytes);
     } else {
-      // ဇာတ်ကားဖိုင်များအတွက် Zero-Corruption Part-File 4-Thread စနစ်ဖြင့် ဒေါင်းမည်
       await _downloadMultiPartVerified(item, totalBytes);
     }
     client.close();
   }
 
-  // 🚀 ၁၀၀% ဖိုင်မပျက်စီးစေသော Zero-Corruption Part-File Engine
   Future<void> _downloadMultiPartVerified(DownloadItem item, int totalBytes) async {
     item.sizeBytes = totalBytes;
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
@@ -346,7 +367,6 @@ class DownloadEngine extends ChangeNotifier {
     int lastDownloaded = 0;
     int lastTime = DateTime.now().millisecondsSinceEpoch;
 
-    // Thread တစ်ခုချင်းစီ သီးခြား Part File ရေးသားခြင်း
     Future<void> downloadPart(Map p) async {
       final pClient = HttpClient();
       final partFile = File('$folder/${item.name}.part${p['idx']}');
@@ -401,15 +421,13 @@ class DownloadEngine extends ChangeNotifier {
 
     if (item.isCanceled || item.isPaused) return;
 
-    // ⚡ ၁။ Part တစ်ခုချင်းစီ၏ Byte အရေအတွက်ကို ၁ Byte မလွဲအောင် အရင်စစ်ဆေးခြင်း
     for (var p in parts) {
       final partFile = File('$folder/${item.name}.part${p['idx']}');
       if (!partFile.existsSync() || partFile.lengthSync() != p['expected']) {
-        throw Exception("Part ${p['idx']} size mismatch (Incomplete download)");
+        throw Exception("Part ${p['idx']} size mismatch");
       }
     }
 
-    // ⚡ ၂။ အားလုံး ပြည့်စုံမှသာ အစအဆုံး စနစ်တကျ ပြန်ပေါင်းစပ်ခြင်း (Stream Assembly)
     item.speed = "Verifying...";
     notifyListeners();
 
@@ -423,22 +441,19 @@ class DownloadEngine extends ChangeNotifier {
     await mergeSink.flush();
     await mergeSink.close();
 
-    // ⚡ ၃။ ဖိုင်တစ်ခုလုံး မူရင်း Size အတိုင်း ကွက်တိ ဟုတ်မဟုတ် နောက်ဆုံး အတည်ပြုခြင်း
     if (tempMerge.existsSync() && tempMerge.lengthSync() == totalBytes) {
       if (finalFile.existsSync()) finalFile.deleteSync();
       await tempMerge.rename(finalFile.path);
 
-      // ပြီးစီးသွားသော Part ဖိုင်ယာယီများကို ရှင်းလင်းခြင်း
       for (int i = 0; i < numThreads; i++) {
         final p = File('$folder/${item.name}.part$i');
         if (p.existsSync()) p.deleteSync();
       }
     } else {
-      throw Exception("Merged file corrupted or size mismatch");
+      throw Exception("Merged file corrupted");
     }
   }
 
-  // APK များနှင့် ဖိုင်အသေးများအတွက် Single Stream
   Future<void> _downloadSingleStream(DownloadItem item, HttpClient client, int totalBytes) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
     final tempFile = File('$folder/${item.name}.tmp');
