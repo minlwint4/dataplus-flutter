@@ -1,10 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'screens/web_portal_screen.dart';
 import 'screens/downloader_screen.dart';
 
-// 🚀 GitHub Actions မှ လှမ်းပို့လိုက်သော Version နံပါတ်အစစ်ကို ဖတ်ယူခြင်း
+// 🚀 GitHub Actions မှ ထည့်ပေးလိုက်သော Dynamic Version (ဥပမာ 1.0.54)
 const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
 
 void main() async {
@@ -42,6 +44,173 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // 🚀 App စဖွင့်ပြီး ၁.၅ စက္ကန့်အကြာတွင် Local Server ဆီ Update စစ်ဆေးခြင်း
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      checkLocalServerUpdate(context, isManual: false);
+    });
+  }
+
+  // 🔍 Local Server ဆီ Version စစ်ဆေးသည့် စနစ် (Manual ရော Auto ပါ သုံးနိုင်သည်)
+  static Future<void> checkLocalServerUpdate(BuildContext context, {bool isManual = false}) async {
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 3);
+      final req = await client.getUrl(Uri.parse('http://10.10.10.10:1000/api/app_version'));
+      final resp = await req.close();
+
+      if (resp.statusCode == 200) {
+        final body = await resp.transform(utf8.decoder).join();
+        final data = jsonDecode(body);
+        final String serverVersionName = data['version_name'] ?? '';
+        final String apkUrl = data['apk_url'] ?? 'http://10.10.10.10:1000/api/download/apk?app=dataplus';
+        final String changelog = data['changelog'] ?? 'လုပ်ဆောင်ချက်အသစ်များ ပါဝင်ပါသည်';
+
+        client.close();
+
+        // ဆာဗာရှိ Version နှင့် ဖုန်းထဲရှိ Version မတူပါက Dialog ပြသမည်
+        if (serverVersionName.isNotEmpty && serverVersionName != kAppVersion) {
+          if (context.mounted) {
+            _showUpdateDialog(context, serverVersionName, apkUrl, changelog);
+          }
+        } else if (isManual && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ နောက်ဆုံးထွက် ဗားရှင်း ($kAppVersion) ကို အသုံးပြုနေပါသည်'),
+              backgroundColor: const Color(0xFF238636),
+            ),
+          );
+        }
+      } else {
+        client.close();
+        if (isManual && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('⚠️ Server မှ Version အချက်အလက် မရရှိပါ')),
+          );
+        }
+      }
+    } catch (_) {
+      if (isManual && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ Local Server (10.10.10.10) နှင့် မချိတ်ဆက်မိပါ')),
+        );
+      }
+    }
+  }
+
+  // 🔔 Update Dialog
+  static void _showUpdateDialog(BuildContext context, String newVersion, String apkUrl, String changelog) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E232B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            const Icon(Icons.system_update_rounded, color: Color(0xFF00E676), size: 24),
+            const SizedBox(width: 8),
+            Text("Update အသစ်ရှိပါသည် ($newVersion)", style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("လက်ရှိဗားရှင်း: $kAppVersion", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+            const SizedBox(height: 6),
+            Text("အသစ်ပါဝင်ချက်များ:\n$changelog", style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("နောက်မှ", style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF238636)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _downloadAndInstallApk(context, apkUrl);
+            },
+            icon: const Icon(Icons.download, size: 16, color: Colors.white),
+            label: const Text("အခုပဲ Update မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
+  // 📥 Update APK ကို ဒေါင်းလုဒ်ဆွဲပြီးသည်နှင့် တန်းသွင်း (Auto-Install) မည့် Function
+  static Future<void> _downloadAndInstallApk(BuildContext context, String url) async {
+    final progressNotifier = ValueNotifier<double>(0.0);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E232B),
+        title: const Text("Update APK ဒေါင်းလုဒ်ဆွဲနေသည်...", style: TextStyle(color: Colors.white, fontSize: 14)),
+        content: ValueListenableBuilder<double>(
+          valueListenable: progressNotifier,
+          builder: (context, val, _) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LinearProgressIndicator(value: val > 0 ? val : null, color: const Color(0xFF00E676)),
+                const SizedBox(height: 10),
+                Text("${(val * 100).toStringAsFixed(0)}%", style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    try {
+      final client = HttpClient();
+      final req = await client.getUrl(Uri.parse(url));
+      final resp = await req.close();
+      final total = resp.contentLength;
+
+      final saveDir = Directory('/storage/emulated/0/Download/DataPlus');
+      if (!await saveDir.exists()) {
+        await saveDir.create(recursive: true);
+      }
+      final savePath = '${saveDir.path}/dataplus_update.apk';
+      final file = File(savePath);
+      final sink = file.openWrite();
+
+      int downloaded = 0;
+      await for (var chunk in resp) {
+        sink.add(chunk);
+        downloaded += chunk.length;
+        if (total > 0) {
+          progressNotifier.value = downloaded / total;
+        }
+      }
+      await sink.flush();
+      await sink.close();
+      client.close();
+
+      if (context.mounted) Navigator.pop(context); // Progress ပိတ်မည်
+
+      // 🚀 Native Android Package Installer ကို တိုက်ရိုက် လှမ်းခေါ်ခြင်း
+      const channel = MethodChannel('com.dataplus/storage');
+      await channel.invokeMethod('openFile', {
+        'path': savePath,
+        'mimeType': 'application/vnd.android.package-archive',
+      });
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update ဒေါင်းမရပါ: $e')));
+      }
+    }
+  }
 
   Widget _buildSlimTabItem({
     required int index,
