@@ -89,7 +89,6 @@ class DownloadEngine extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // 🚀 User က Storage ရွေးချယ်လိုက်ပါက Queue ထဲက မဒေါင်းရသေးသော ဖိုင်များ၏ သိမ်းဆည်းရာလမ်းကြောင်းကိုပါ အလိုအလျောက် လိုက်ပြောင်းပေးခြင်း
   Future<void> setStorageTarget(String target) async {
     if (target == 'sdcard' && !isSdAvailable) return;
     storageTarget = target;
@@ -116,7 +115,6 @@ class DownloadEngine extends ChangeNotifier {
     return totalQueuedBytes > activeFree && totalQueuedBytes > 0;
   }
 
-  // 🚀 ဖိုင်များ ထည့်သွင်းခြင်း (တန်းမဒေါင်းဘဲ Queue ထဲတွင်သာ အသင့်ထားရှိခြင်း)
   void addUrls(List<String> urls) {
     bool added = false;
     for (var u in urls) {
@@ -146,14 +144,12 @@ class DownloadEngine extends ChangeNotifier {
       }
     }
     if (added) {
-      activeTab.value = 'Queue'; // Queue စာမျက်နှာသို့ ချက်ချင်းညွှန်းပေးမည်
+      activeTab.value = 'Queue';
       _fetchSizes();
       notifyListeners();
-      // ⚠️ _startWorker() ကို အလိုအလျောက် မခေါ်တော့ပါ (User စတင်ခိုင်းမှသာ စတင်ပါမည်)
     }
   }
 
-  // 🚀 User က "စတင်ဒေါင်းမည်" ခလုတ်နှိပ်မှသာ ဒေါင်းလုဒ်စတင်မည့် Function
   void startAllQueued() {
     for (var item in downloads) {
       if (item.status == 'paused') {
@@ -167,7 +163,6 @@ class DownloadEngine extends ChangeNotifier {
     }
   }
 
-  // ⏸️ ဒေါင်းလုဒ်အားလုံး ခေတ္တရပ်နားခြင်း
   void pauseAll() {
     for (var item in downloads) {
       if (item.status == 'downloading' || item.status == 'queued') {
@@ -210,14 +205,24 @@ class DownloadEngine extends ChangeNotifier {
     }
   }
 
+  void _cleanupTempFiles(String folder, String name) {
+    try {
+      final tmp = File('$folder/$name.tmp');
+      if (tmp.existsSync()) tmp.deleteSync();
+      final merging = File('$folder/$name.merging');
+      if (merging.existsSync()) merging.deleteSync();
+      for (int i = 0; i < 8; i++) {
+        final part = File('$folder/$name.part$i');
+        if (part.existsSync()) part.deleteSync();
+      }
+    } catch (_) {}
+  }
+
   void deleteItem(DownloadItem item) {
     item.isCanceled = true;
     item.isPaused = true;
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
-    final file = File('$folder/${item.name}.tmp');
-    if (file.existsSync()) {
-      try { file.deleteSync(); } catch (_) {}
-    }
+    _cleanupTempFiles(folder, item.name);
     downloads.remove(item);
     updateStorageInfo();
     notifyListeners();
@@ -227,10 +232,7 @@ class DownloadEngine extends ChangeNotifier {
     for (var it in items) {
       it.isCanceled = true;
       final folder = it.savePath.isNotEmpty ? it.savePath : currentActivePath;
-      final file = File('$folder/${it.name}.tmp');
-      if (file.existsSync()) {
-        try { file.deleteSync(); } catch (_) {}
-      }
+      _cleanupTempFiles(folder, it.name);
       downloads.remove(it);
     }
     updateStorageInfo();
@@ -245,10 +247,7 @@ class DownloadEngine extends ChangeNotifier {
     for (var it in toRemove) {
       it.isCanceled = true;
       final folder = it.savePath.isNotEmpty ? it.savePath : currentActivePath;
-      final file = File('$folder/${it.name}.tmp');
-      if (file.existsSync()) {
-        try { file.deleteSync(); } catch (_) {}
-      }
+      _cleanupTempFiles(folder, it.name);
       downloads.remove(it);
     }
     updateStorageInfo();
@@ -318,60 +317,58 @@ class DownloadEngine extends ChangeNotifier {
       await probeResp.drain();
     } catch (_) {}
 
+    // APK ဖိုင် သို့မဟုတ် Range မရပါက Single Stream ဖြင့် ဒေါင်းမည်
     if (!canMultiThread || totalBytes < 5 * 1024 * 1024 || item.name.toLowerCase().endsWith('.apk')) {
       await _downloadSingleStream(item, client, totalBytes);
     } else {
-      await _downloadMultiThreadDirectSeek(item, totalBytes);
+      // ဇာတ်ကားဖိုင်များအတွက် Zero-Corruption Part-File 4-Thread စနစ်ဖြင့် ဒေါင်းမည်
+      await _downloadMultiPartVerified(item, totalBytes);
     }
     client.close();
   }
 
-  Future<void> _downloadMultiThreadDirectSeek(DownloadItem item, int totalBytes) async {
+  // 🚀 ၁၀၀% ဖိုင်မပျက်စီးစေသော Zero-Corruption Part-File Engine
+  Future<void> _downloadMultiPartVerified(DownloadItem item, int totalBytes) async {
     item.sizeBytes = totalBytes;
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
-    final tempFile = File('$folder/${item.name}.tmp');
     final finalFile = File('$folder/${item.name}');
-
-    final initRaf = await tempFile.open(mode: FileMode.write);
-    await initRaf.truncate(totalBytes);
-    await initRaf.close();
 
     const numThreads = 4;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
       final s = i * partSize;
       final e = (i == numThreads - 1) ? (totalBytes - 1) : (s + partSize - 1);
-      return {'idx': i, 'start': s, 'end': e};
+      final expected = e - s + 1;
+      return {'idx': i, 'start': s, 'end': e, 'expected': expected};
     });
 
     List<int> bytesDownloaded = List.filled(numThreads, 0);
     int lastDownloaded = 0;
     int lastTime = DateTime.now().millisecondsSinceEpoch;
 
+    // Thread တစ်ခုချင်းစီ သီးခြား Part File ရေးသားခြင်း
     Future<void> downloadPart(Map p) async {
       final pClient = HttpClient();
+      final partFile = File('$folder/${item.name}.part${p['idx']}');
+      final sink = partFile.openWrite(mode: FileMode.write);
+
       try {
         final req = await pClient.getUrl(Uri.parse(item.url));
         req.headers.add(HttpHeaders.rangeHeader, 'bytes=${p['start']}-${p['end']}');
         final resp = await req.close();
 
         if (resp.statusCode != HttpStatus.partialContent) {
-          throw HttpException('Thread failed: ${resp.statusCode}');
+          throw HttpException('Part ${p['idx']} failed: ${resp.statusCode}');
         }
-
-        final raf = await tempFile.open(mode: FileMode.writeOnly);
-        int writePos = p['start'];
 
         await for (var chunk in resp) {
           if (item.isPaused || item.isCanceled) break;
-          await raf.setPosition(writePos);
-          await raf.writeFrom(chunk);
-          writePos += chunk.length;
+          sink.add(chunk);
           bytesDownloaded[p['idx']] += chunk.length;
         }
-        await raf.flush();
-        await raf.close();
+        await sink.flush();
       } finally {
+        await sink.close();
         pClient.close();
       }
     }
@@ -404,15 +401,44 @@ class DownloadEngine extends ChangeNotifier {
 
     if (item.isCanceled || item.isPaused) return;
 
-    final totalDone = bytesDownloaded.reduce((a, b) => a + b);
-    if (totalDone == totalBytes) {
+    // ⚡ ၁။ Part တစ်ခုချင်းစီ၏ Byte အရေအတွက်ကို ၁ Byte မလွဲအောင် အရင်စစ်ဆေးခြင်း
+    for (var p in parts) {
+      final partFile = File('$folder/${item.name}.part${p['idx']}');
+      if (!partFile.existsSync() || partFile.lengthSync() != p['expected']) {
+        throw Exception("Part ${p['idx']} size mismatch (Incomplete download)");
+      }
+    }
+
+    // ⚡ ၂။ အားလုံး ပြည့်စုံမှသာ အစအဆုံး စနစ်တကျ ပြန်ပေါင်းစပ်ခြင်း (Stream Assembly)
+    item.speed = "Verifying...";
+    notifyListeners();
+
+    final tempMerge = File('$folder/${item.name}.merging');
+    final mergeSink = tempMerge.openWrite(mode: FileMode.write);
+
+    for (int i = 0; i < numThreads; i++) {
+      final partFile = File('$folder/${item.name}.part$i');
+      await mergeSink.addStream(partFile.openRead());
+    }
+    await mergeSink.flush();
+    await mergeSink.close();
+
+    // ⚡ ၃။ ဖိုင်တစ်ခုလုံး မူရင်း Size အတိုင်း ကွက်တိ ဟုတ်မဟုတ် နောက်ဆုံး အတည်ပြုခြင်း
+    if (tempMerge.existsSync() && tempMerge.lengthSync() == totalBytes) {
       if (finalFile.existsSync()) finalFile.deleteSync();
-      await tempFile.rename(finalFile.path);
+      await tempMerge.rename(finalFile.path);
+
+      // ပြီးစီးသွားသော Part ဖိုင်ယာယီများကို ရှင်းလင်းခြင်း
+      for (int i = 0; i < numThreads; i++) {
+        final p = File('$folder/${item.name}.part$i');
+        if (p.existsSync()) p.deleteSync();
+      }
     } else {
-      throw Exception('Download incomplete');
+      throw Exception("Merged file corrupted or size mismatch");
     }
   }
 
+  // APK များနှင့် ဖိုင်အသေးများအတွက် Single Stream
   Future<void> _downloadSingleStream(DownloadItem item, HttpClient client, int totalBytes) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
     final tempFile = File('$folder/${item.name}.tmp');
