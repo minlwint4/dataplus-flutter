@@ -6,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'screens/web_portal_screen.dart';
 import 'screens/downloader_screen.dart';
 
-// 🚀 GitHub Actions မှ ထည့်ပေးလိုက်သော Dynamic Version (ဥပမာ 1.0.54)
+// 🚀 GitHub Actions မှ ထည့်ပေးလိုက်သော Dynamic Version (ဥပမာ 1.0.55)
 const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
 
 void main() async {
@@ -38,23 +38,7 @@ class DataPlusApp extends StatelessWidget {
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
-  @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
-}
-
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    // 🚀 App စဖွင့်ပြီး ၁.၅ စက္ကန့်အကြာတွင် Local Server ဆီ Update စစ်ဆေးခြင်း
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      checkLocalServerUpdate(context, isManual: false);
-    });
-  }
-
-  // 🔍 Local Server ဆီ Version စစ်ဆေးသည့် စနစ် (Manual ရော Auto ပါ သုံးနိုင်သည်)
+  // 🚀 DownloaderScreen ဘက်က လှမ်းခေါ်နိုင်မည့် Static Method
   static Future<void> checkLocalServerUpdate(BuildContext context, {bool isManual = false}) async {
     try {
       final client = HttpClient();
@@ -71,7 +55,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
         client.close();
 
-        // ဆာဗာရှိ Version နှင့် ဖုန်းထဲရှိ Version မတူပါက Dialog ပြသမည်
         if (serverVersionName.isNotEmpty && serverVersionName != kAppVersion) {
           if (context.mounted) {
             _showUpdateDialog(context, serverVersionName, apkUrl, changelog);
@@ -101,7 +84,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  // 🔔 Update Dialog
   static void _showUpdateDialog(BuildContext context, String newVersion, String apkUrl, String changelog) {
     showDialog(
       context: context,
@@ -144,7 +126,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
-  // 📥 Update APK ကို ဒေါင်းလုဒ်ဆွဲပြီးသည်နှင့် တန်းသွင်း (Auto-Install) မည့် Function
   static Future<void> _downloadAndInstallApk(BuildContext context, String url) async {
     final progressNotifier = ValueNotifier<double>(0.0);
 
@@ -196,9 +177,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       await sink.close();
       client.close();
 
-      if (context.mounted) Navigator.pop(context); // Progress ပိတ်မည်
+      if (context.mounted) Navigator.pop(context);
 
-      // 🚀 Native Android Package Installer ကို တိုက်ရိုက် လှမ်းခေါ်ခြင်း
       const channel = MethodChannel('com.dataplus/storage');
       await channel.invokeMethod('openFile', {
         'path': savePath,
@@ -210,6 +190,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update ဒေါင်းမရပါ: $e')));
       }
     }
+  }
+
+  @override
+  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
+}
+
+class _MainNavigationScreenState extends State<MainNavigationScreen> {
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      MainNavigationScreen.checkLocalServerUpdate(context, isManual: false);
+    });
   }
 
   Widget _buildSlimTabItem({
