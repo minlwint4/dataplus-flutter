@@ -28,40 +28,44 @@ jobs:
         flutter-version: '3.24.0'
         channel: 'stable'
 
-    - name: Configure Android Project & Inject FileProvider
+    - name: Configure Android Project & Fix Kotlin Version
       run: |
         if [ ! -d "android" ]; then
           echo "Generating Android Project structure..."
           flutter create . --org com.example --project-name dataplus_app
         fi
 
-        # ⚡ 1. Kotlin version ကို settings.gradle ထဲတွင် 1.9.24 အဖြစ် ပြောင်းလဲခြင်း
-        if [ -f "android/settings.gradle" ]; then
-          sed -i -E "s/id\s*\(?['\"]org\.jetbrains\.kotlin\.android['\"]\)?\s+version\s+['\"][^'\"]*['\"]/id \"org.jetbrains.kotlin.android\" version \"1.9.24\"/g" android/settings.gradle
-        fi
+        # ⚡ Python ဖြင့် settings.gradle နှင့် build.gradle အားလုံးရှိ Kotlin ကို 1.9.24 သို့ အပြီးတိုင် အစားထိုးခြင်း
+        python3 -c "
+        import os, re
 
-        # ⚡ 2. Kotlin version ကို root build.gradle ထဲတွင် 1.9.24 အဖြစ် အပြည့်အစုံ ပြင်ဆင်ခြင်း
-        if [ -f "android/build.gradle" ]; then
-          sed -i -E "s/ext\.kotlin_version\s*=\s*['\"][^'\"]*['\"]/ext.kotlin_version = '1.9.24'/g" android/build.gradle
-          sed -i -E "s/classpath\s+['\"]org\.jetbrains\.kotlin:kotlin-gradle-plugin:[^'\"]*['\"]/classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24'/g" android/build.gradle
+        # 1. settings.gradle
+        sg = 'android/settings.gradle'
+        if os.path.exists(sg):
+            with open(sg, 'r', encoding='utf-8') as f:
+                c = f.read()
+            c = re.sub(r'(id\s*[\'\"\(]org\.jetbrains\.kotlin\.android[\'\"\)]\s+version\s+[\'\"])[^\'\"]+([\'\"])', r'\g<1>1.9.24\g<2>', c)
+            with open(sg, 'w', encoding='utf-8') as f:
+                f.write(c)
 
-          if ! grep -q "ext.kotlin_version" android/build.gradle; then
-            sed -i '/buildscript\s*{/a \    ext.kotlin_version = "1.9.24"' android/build.gradle
-          fi
-
-          if ! grep -q "resolutionStrategy.eachDependency" android/build.gradle; then
-            printf '\n%s\n' \
-              'allprojects {' \
-              '    configurations.all {' \
-              '        resolutionStrategy.eachDependency { details ->' \
-              '            if (details.requested.group == "org.jetbrains.kotlin") {' \
-              '                details.useVersion "1.9.24"' \
-              '            }' \
-              '        }' \
-              '    }' \
-              '}' >> android/build.gradle
-          fi
-        fi
+        # 2. root build.gradle
+        bg = 'android/build.gradle'
+        if os.path.exists(bg):
+            with open(bg, 'r', encoding='utf-8') as f:
+                c = f.read()
+            c = re.sub(r'ext\.kotlin_version\s*=\s*[\'\"][^\'\"]*[\'\"]', \"ext.kotlin_version = '1.9.24'\", c)
+            c = re.sub(r'org\.jetbrains\.kotlin:kotlin-gradle-plugin:[\d\.]+', 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24', c)
+            if 'ext.kotlin_version' not in c:
+                if 'buildscript {' in c:
+                    c = c.replace('buildscript {', \"buildscript {\n    ext.kotlin_version = '1.9.24'\")
+                else:
+                    c = \"buildscript {\n    ext.kotlin_version = '1.9.24'\n}\n\" + c
+            
+            if 'resolutionStrategy.eachDependency' not in c:
+                c += \"\nallprojects {\n    configurations.all {\n        resolutionStrategy.eachDependency { details ->\n            if (details.requested.group == 'org.jetbrains.kotlin') {\n                details.useVersion '1.9.24'\n            }\n        }\n    }\n}\n\"
+            with open(bg, 'w', encoding='utf-8') as f:
+                f.write(c)
+        "
 
         # ⚡ 3. FileProvider အတွက် filepaths.xml ဖန်တီးခြင်း
         mkdir -p android/app/src/main/res/xml
