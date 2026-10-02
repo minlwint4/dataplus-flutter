@@ -20,7 +20,7 @@ class DataPlusApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DATA PLUS',
+      title: 'DATA_PLUS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
@@ -64,16 +64,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             children: [
               Icon(
                 icon,
-                size: 16,
+                size: 15,
                 color: isSelected ? const Color(0xFF00E676) : const Color(0xFF8B949E),
               ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isSelected ? Colors.white : const Color(0xFF8B949E),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? Colors.white : const Color(0xFF8B949E),
+                  ),
                 ),
               ),
             ],
@@ -93,18 +96,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           const DownloaderScreen(),
         ],
       ),
+      // 🚀 Version (0.0.50) ပါဝင်သော Ultra-Slim Bottom Bar
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
           height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: const BoxDecoration(
             color: Color(0xFF141920),
             border: Border(top: BorderSide(color: Color(0xFF21262D), width: 0.8)),
           ),
           child: Row(
             children: [
-              _buildSlimTabItem(index: 0, icon: Icons.movie_creation_outlined, label: 'DATA PLUS'),
+              _buildSlimTabItem(index: 0, icon: Icons.movie_creation_outlined, label: 'DATA PLUS (0.0.50)'),
               const SizedBox(width: 8),
               _buildSlimTabItem(index: 1, icon: Icons.download_rounded, label: 'Downloader'),
             ],
