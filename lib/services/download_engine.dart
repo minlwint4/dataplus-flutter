@@ -211,7 +211,7 @@ class DownloadEngine extends ChangeNotifier {
       if (tmp.existsSync()) tmp.deleteSync();
       final merging = File('$folder/$name.merging');
       if (merging.existsSync()) merging.deleteSync();
-      for (int i = 0; i < 8; i++) {
+      for (int i = 0; i < 16; i++) {
         final part = File('$folder/$name.part$i');
         if (part.existsSync()) part.deleteSync();
       }
@@ -348,7 +348,7 @@ class DownloadEngine extends ChangeNotifier {
     client.close();
   }
 
-  // 🚀 6 THREADS DIRECT FAST ENGINE (လိုင်း ၆ လိုင်း တစ်ပြိုင်နက်ဆွဲပြီး တိုက်ရိုက် ရေးချမည့်စနစ်)
+  // 🚀 8 THREADS DIRECT FAST ENGINE (လိုင်း ၈ လိုင်း တစ်ပြိုင်နက်ဆွဲပြီး Direct Write ရေးချမည့်စနစ်)
   Future<void> _downloadMultiPartDirect(DownloadItem item, int totalBytes) async {
     item.sizeBytes = totalBytes;
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
@@ -364,8 +364,8 @@ class DownloadEngine extends ChangeNotifier {
       raf.truncateSync(totalBytes);
     } catch (_) {}
 
-    // ⚡ Thread အရေအတွက်ကို 6 သို့ တိုးမြှင့်သတ်မှတ်ခြင်း
-    const numThreads = 6;
+    // ⚡ Thread အရေအတွက်ကို 8 သို့ သတ်မှတ်ထားခြင်း
+    const numThreads = 8;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
       final s = i * partSize;
