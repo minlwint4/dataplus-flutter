@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/download_engine.dart';
 
@@ -17,6 +18,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   late final WebViewController _controller;
   final DownloadEngine _engine = DownloadEngine();
   bool _isLoading = true;
+  DateTime? _lastBackPressTime;
 
   static const String _userNameFilePath = '/storage/emulated/0/Download/DataPlus/user_name.txt';
 
@@ -50,7 +52,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     return null;
   }
 
-  // 📥 ရောက်လာသော Download Link များကို Downloader Engine ထဲ ထည့်သွင်းခြင်း
   void _processIncomingDownloadLinks(String payload) {
     if (payload.trim().isEmpty) return;
 
@@ -68,7 +69,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           .toList();
     }
 
-    // လိပ်စာ အပြည့်အစုံ (Absolute URL) ဖြစ်အောင် ပြုပြင်ခြင်း
     List<String> finalUrls = rawUrls.map((u) {
       if (!u.startsWith('http')) {
         if (u.startsWith('/')) {
@@ -82,7 +82,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
     if (finalUrls.isNotEmpty) {
       _engine.addUrls(finalUrls);
-      // 🚀 Downloader Tab (Index 1) သို့ ချက်ချင်း ခုန်ကူးပြောင်းပေးခြင်း
       widget.onTabChangeRequested?.call(1);
     }
   }
@@ -91,7 +90,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0A0A0A))
-      // 👤 User Name သိမ်းမည့် Bridge
       ..addJavaScriptChannel(
         'DataPlusUserBridge',
         onMessageReceived: (JavaScriptMessage message) {
@@ -101,7 +99,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           }
         },
       )
-      // 🚀 ဒေါင်းလုဒ် Link များကို လက်ခံမည့် Bridge
       ..addJavaScriptChannel(
         'DataPlusDownloadBridge',
         onMessageReceived: (JavaScriptMessage message) {
@@ -113,7 +110,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           onNavigationRequest: (NavigationRequest request) {
             final url = request.url;
 
-            // ⚡ ၁။ "app သွင်းမယ်" APK Link သို့မဟုတ် ဖိုင်ဒေါင်းလုဒ် Link များကို ကြားဖြတ်ဖမ်းယူပြီး Downloader သို့ ပို့ပေးခြင်း
             if (url.contains('/api/download/apk') ||
                 url.toLowerCase().contains('.apk') ||
                 url.contains('/api/download/file')) {
@@ -121,7 +117,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               return NavigationDecision.prevent;
             }
 
-            // ⚡ ၂။ intent:// နှင့် dataplus:// Link များကို ကြားဖြတ်ဖမ်းယူခြင်း
             if (url.startsWith('dataplus://') || url.startsWith('intent://')) {
               final matches = RegExp(r'https?://[^\s;"]+').allMatches(url);
               if (matches.isNotEmpty) {
@@ -132,9 +127,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             }
             return NavigationDecision.navigate;
           },
-          onPageStarted: (String url) {
-            // Page ကူးတိုင်း Loading အဝိုင်းမပြတော့ပါ
-          },
+          onPageStarted: (String url) {},
           onPageFinished: (String url) async {
             if (_isLoading) {
               setState(() => _isLoading = false);
@@ -142,7 +135,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
             await _controller.runJavaScript('''
               (function() {
-                // 1. User Name စောင့်ကြည့်မှတ်သားခြင်း
                 var origSetItem = localStorage.setItem;
                 localStorage.setItem = function(key, val) {
                   origSetItem.apply(this, arguments);
@@ -151,7 +143,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   }
                 };
 
-                // 2. Clipboard သို့ Link Copy ကူးခြင်းများကို ဖမ်းယူခြင်း
                 if (navigator.clipboard) {
                   var origWriteText = navigator.clipboard.writeText;
                   navigator.clipboard.writeText = function(text) {
@@ -162,7 +153,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   };
                 }
 
-                // 3. execCommand('copy') ဖမ်းယူခြင်း
                 var origExec = document.execCommand;
                 document.execCommand = function(cmd) {
                   if (cmd === 'copy') {
@@ -182,7 +172,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   return origExec ? origExec.apply(document, arguments) : true;
                 };
 
-                // 4. "app သွင်းမယ်" နှင့် ဒေါင်းလုဒ် ခလုတ်များကို နှိပ်လိုက်သည်နှင့် Downloader ထံ ချက်ချင်း ပို့ပေးခြင်း
                 document.addEventListener('click', function(e) {
                   var a = e.target.closest('a');
                   if (a && a.href && (a.href.indexOf('/api/download/apk') !== -1 || a.href.indexOf('.apk') !== -1)) {
@@ -210,7 +199,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               })();
             ''');
 
-            // User Name အလိုအလျောက် ပြန်ထည့်ပေးခြင်း
             final savedName = await _getSavedUserName();
             if (savedName != null && savedName.isNotEmpty) {
               await _controller.runJavaScript('''
@@ -240,17 +228,60 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            WebViewWidget(controller: _controller),
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(color: Color(0xFF00E676)),
+    // ⚡ PopScope ဖြင့် Android Back ခလုတ်နှိပ်ခြင်းကို ဖမ်းယူကိုင်တွယ်ခြင်း
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (didPop) return;
+
+        // ၁။ WebView ထဲတွင် နောက်သို့ ပြန်ဆုတ်ရန် စာမျက်နှာရှိပါက အရင်စာမျက်နှာဆီသို့ ပြန်သွားမည်
+        if (await _controller.canGoBack()) {
+          await _controller.goBack();
+          return;
+        }
+
+        // ၂။ မူလ Home စာမျက်နှာသို့ ရောက်နေပါက ၂ စက္ကန့်အတွင်း ၂ ကြိမ်နှိပ်မှ ထွက်မည့် စနစ်
+        final now = DateTime.now();
+        if (_lastBackPressTime == null ||
+            now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          _lastBackPressTime = now;
+          if (mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'App မှ ထွက်ရန် နောက်တစ်ကြိမ် ထပ်နှိပ်ပါ',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                duration: Duration(seconds: 2),
+                backgroundColor: Color(0xFF262626),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(25)),
+                ),
+                margin: EdgeInsets.symmetric(horizontal: 50, vertical: 20),
               ),
-          ],
+            );
+          }
+          return;
+        }
+
+        // ၃။ ၂ ကြိမ် ဆက်တိုက် နှိပ်ပါက App မှ ပုံမှန်အတိုင်း ထွက်မည်
+        SystemNavigator.pop();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0A0A0A),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              WebViewWidget(controller: _controller),
+              if (_isLoading)
+                const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF00E676)),
+                ),
+            ],
+          ),
         ),
       ),
     );
