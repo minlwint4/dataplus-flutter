@@ -365,7 +365,7 @@ class DownloadEngine extends ChangeNotifier {
     } catch (_) {}
 
     // ⚡ Thread အရေအတွက်ကို 8 သို့ သတ်မှတ်ထားခြင်း
-    const numThreads = 8;
+    const numThreads = 5;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
       final s = i * partSize;
