@@ -248,8 +248,9 @@ jobs:
           --build-number=${{ github.run_number }} \
           --dart-define=APP_VERSION=1.0.${{ github.run_number }}
 
+    # ⚡ အောက်ဆုံး Artifact နာမည်တွင် Run Number တိုက်ရိုက် ထည့်သွင်းသတ်မှတ်ခြင်း
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: DATAPLUS_AllInOne_v1.0
+        name: DATAPLUS_v1.0.${{ github.run_number }}
         path: build/app/outputs/flutter-apk/app-release.apk
