@@ -314,71 +314,190 @@ class DownloadEngine extends ChangeNotifier {
     }
   }
 
-  // ⚡ DIRECT FAST STREAM ENGINE (Verifying မလို၊ Merge မလို၊ တန်းပြီး Finished ဖြစ်စေမည့် စနစ်)
   Future<void> _downloadSmartEngine(DownloadItem item) async {
     final client = HttpClient();
+    int totalBytes = 0;
+    bool canMultiThread = false;
+
+    try {
+      final probeReq = await client.getUrl(Uri.parse(item.url));
+      probeReq.headers.add(HttpHeaders.rangeHeader, 'bytes=0-0');
+      final probeResp = await probeReq.close();
+
+      if (probeResp.statusCode == HttpStatus.partialContent) {
+        final cr = probeResp.headers.value(HttpHeaders.contentRangeHeader);
+        if (cr != null && cr.contains('/')) {
+          final totalStr = cr.split('/').last.trim();
+          final parsed = int.tryParse(totalStr);
+          if (parsed != null && parsed > 0) {
+            totalBytes = parsed;
+            canMultiThread = true;
+          }
+        }
+      } else if (probeResp.statusCode == HttpStatus.ok) {
+        totalBytes = probeResp.contentLength;
+      }
+      await probeResp.drain();
+    } catch (_) {}
+
+    // ⚡ 5MB အောက် သို့မဟုတ် APK ဖြစ်ပါက Single Stream ဆွဲမည်၊ ဗီဒီယိုဖိုင်ကြီးများဆိုပါက 4 Threads ဖြင့် အမြန်ဆုံးဆွဲမည်
+    if (!canMultiThread || totalBytes < 5 * 1024 * 1024 || item.name.toLowerCase().endsWith('.apk')) {
+      await _downloadSingleStream(item, client, totalBytes);
+    } else {
+      await _downloadMultiPartDirect(item, totalBytes);
+    }
+    client.close();
+  }
+
+  // 🚀 50+ MB/s MULTI-THREAD DIRECT ENGINE (လိုင်း ၄ လိုင်း ပြိုင်တူဆွဲမည် + Verifying မလိုဘဲ တန်းပြီးမည်)
+  Future<void> _downloadMultiPartDirect(DownloadItem item, int totalBytes) async {
+    item.sizeBytes = totalBytes;
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
     final tempFile = File('$folder/${item.name}.tmp');
     final finalFile = File('$folder/${item.name}');
 
+    if (tempFile.existsSync()) {
+      try { tempFile.deleteSync(); } catch (_) {}
+    }
+
+    final raf = await tempFile.open(mode: FileMode.write);
     try {
-      final req = await client.getUrl(Uri.parse(item.url));
-      final resp = await req.close();
+      raf.truncateSync(totalBytes);
+    } catch (_) {}
 
-      if (resp.statusCode != HttpStatus.ok && resp.statusCode != HttpStatus.partialContent) {
-        throw HttpException('Failed with status: ${resp.statusCode}');
-      }
+    const numThreads = 4;
+    final partSize = totalBytes ~/ numThreads;
+    final parts = List.generate(numThreads, (i) {
+      final s = i * partSize;
+      final e = (i == numThreads - 1) ? (totalBytes - 1) : (s + partSize - 1);
+      return {'idx': i, 'start': s, 'end': e};
+    });
 
-      final totalLen = (item.sizeBytes > 0)
-          ? item.sizeBytes
-          : (resp.contentLength > 0 ? resp.contentLength : 0);
-      item.sizeBytes = totalLen;
+    List<int> bytesDownloaded = List.filled(numThreads, 0);
+    int lastDownloaded = 0;
+    int lastTime = DateTime.now().millisecondsSinceEpoch;
 
-      final sink = tempFile.openWrite(mode: FileMode.write);
-      int downloaded = 0;
-      int lastDownloaded = 0;
-      int lastTime = DateTime.now().millisecondsSinceEpoch;
+    final timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      final currentBytes = bytesDownloaded.reduce((a, b) => a + b);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final dt = (now - lastTime) / 1000.0;
+      if (dt > 0) {
+        final speedBytes = (currentBytes - lastDownloaded) / dt;
+        final speedMb = speedBytes / (1024 * 1024);
+        item.speed = "${speedMb.toStringAsFixed(1)} MB/s";
+        item.progress = (currentBytes / totalBytes).clamp(0.0, 0.99);
 
-      final timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-        final now = DateTime.now().millisecondsSinceEpoch;
-        final dt = (now - lastTime) / 1000.0;
-        if (dt > 0) {
-          final speedBytes = (downloaded - lastDownloaded) / dt;
-          final speedMb = speedBytes / (1024 * 1024);
-          item.speed = "${speedMb.toStringAsFixed(1)} MB/s";
-          if (totalLen > 0) {
-            item.progress = (downloaded / totalLen).clamp(0.0, 0.99);
-            if (speedBytes > 0) {
-              final remSec = ((totalLen - downloaded) / speedBytes).round();
-              item.eta = "${remSec ~/ 60}:${(remSec % 60).toString().padLeft(2, '0')}";
-            }
-          }
-          lastDownloaded = downloaded;
-          lastTime = now;
-          notifyListeners();
+        if (speedBytes > 0) {
+          final remSec = ((totalBytes - currentBytes) / speedBytes).round();
+          item.eta = "${remSec ~/ 60}:${(remSec % 60).toString().padLeft(2, '0')}";
         }
-      });
+        lastDownloaded = currentBytes;
+        lastTime = now;
+        notifyListeners();
+      }
+    });
 
+    Future<void> downloadPart(Map p) async {
+      final pClient = HttpClient();
+      int writePos = p['start'];
       try {
+        final req = await pClient.getUrl(Uri.parse(item.url));
+        req.headers.add(HttpHeaders.rangeHeader, 'bytes=${p['start']}-${p['end']}');
+        final resp = await req.close();
+
+        if (resp.statusCode != HttpStatus.partialContent && resp.statusCode != HttpStatus.ok) {
+          throw HttpException('Part ${p['idx']} failed: ${resp.statusCode}');
+        }
+
         await for (var chunk in resp) {
           if (item.isPaused || item.isCanceled) break;
-          sink.add(chunk);
-          downloaded += chunk.length;
+          // ဖိုင်ထဲသို့ သက်ဆိုင်ရာ နေရာအတိုင်း တိုက်ရိုက် ရေးချခြင်း (ဖိုင်ပြန်ဆက်စရာ မလိုတော့ပါ)
+          raf.setPositionSync(writePos);
+          raf.writeFromSync(chunk);
+          writePos += chunk.length;
+          bytesDownloaded[p['idx']] += chunk.length;
         }
-        await sink.flush();
       } finally {
-        timer.cancel();
-        await sink.close();
+        pClient.close();
       }
-
-      if (item.isCanceled || item.isPaused) return;
-
-      // 🚀 အချိန်မဆွဲဘဲ ချက်ချင်း Rename လုပ်ကာ ပြီးမြောက်စေခြင်း (0.01 sec)
-      if (finalFile.existsSync()) finalFile.deleteSync();
-      await tempFile.rename(finalFile.path);
-
-    } finally {
-      client.close();
     }
+
+    try {
+      await Future.wait(parts.map((p) => downloadPart(p)));
+      await raf.flush();
+    } finally {
+      timer.cancel();
+      try { raf.closeSync(); } catch (_) {}
+    }
+
+    if (item.isCanceled || item.isPaused) {
+      if (item.isCanceled && tempFile.existsSync()) {
+        try { tempFile.deleteSync(); } catch (_) {}
+      }
+      return;
+    }
+
+    // ⚡ ဒေါင်းလုဒ် 100% ပြည့်သည်နှင့် တန်းပြီး Complete ဖြစ်စေခြင်း (၀.၀၀၁ စက္ကန့်)
+    if (finalFile.existsSync()) {
+      try { finalFile.deleteSync(); } catch (_) {}
+    }
+    await tempFile.rename(finalFile.path);
+  }
+
+  Future<void> _downloadSingleStream(DownloadItem item, HttpClient client, int totalBytes) async {
+    final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
+    final tempFile = File('$folder/${item.name}.tmp');
+    final finalFile = File('$folder/${item.name}');
+
+    final req = await client.getUrl(Uri.parse(item.url));
+    final resp = await req.close();
+    if (resp.statusCode != HttpStatus.ok && resp.statusCode != HttpStatus.partialContent) {
+      throw HttpException('Failed: ${resp.statusCode}');
+    }
+
+    final totalLen = (totalBytes > 0) ? totalBytes : (resp.contentLength > 0 ? resp.contentLength : 0);
+    item.sizeBytes = totalLen;
+
+    final sink = tempFile.openWrite(mode: FileMode.write);
+    int downloaded = 0;
+    int lastDownloaded = 0;
+    int lastTime = DateTime.now().millisecondsSinceEpoch;
+
+    final timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final dt = (now - lastTime) / 1000.0;
+      if (dt > 0) {
+        final speedBytes = (downloaded - lastDownloaded) / dt;
+        final speedMb = speedBytes / (1024 * 1024);
+        item.speed = "${speedMb.toStringAsFixed(1)} MB/s";
+        if (totalLen > 0) {
+          item.progress = (downloaded / totalLen).clamp(0.0, 0.99);
+          if (speedBytes > 0) {
+            final remSec = ((totalLen - downloaded) / speedBytes).round();
+            item.eta = "${remSec ~/ 60}:${(remSec % 60).toString().padLeft(2, '0')}";
+          }
+        }
+        lastDownloaded = downloaded;
+        lastTime = now;
+        notifyListeners();
+      }
+    });
+
+    try {
+      await for (var chunk in resp) {
+        if (item.isPaused || item.isCanceled) break;
+        sink.add(chunk);
+        downloaded += chunk.length;
+      }
+      await sink.flush();
+    } finally {
+      timer.cancel();
+      await sink.close();
+    }
+
+    if (item.isCanceled || item.isPaused) return;
+
+    if (finalFile.existsSync()) finalFile.deleteSync();
+    await tempFile.rename(finalFile.path);
   }
 }
