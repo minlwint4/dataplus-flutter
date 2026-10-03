@@ -340,7 +340,6 @@ class DownloadEngine extends ChangeNotifier {
       await probeResp.drain();
     } catch (_) {}
 
-    // ⚡ 5MB အောက် သို့မဟုတ် APK ဖြစ်ပါက Single Stream ဆွဲမည်၊ ဗီဒီယိုဖိုင်ကြီးများဆိုပါက 4 Threads ဖြင့် အမြန်ဆုံးဆွဲမည်
     if (!canMultiThread || totalBytes < 5 * 1024 * 1024 || item.name.toLowerCase().endsWith('.apk')) {
       await _downloadSingleStream(item, client, totalBytes);
     } else {
@@ -349,7 +348,7 @@ class DownloadEngine extends ChangeNotifier {
     client.close();
   }
 
-  // 🚀 50+ MB/s MULTI-THREAD DIRECT ENGINE (လိုင်း ၄ လိုင်း ပြိုင်တူဆွဲမည် + Verifying မလိုဘဲ တန်းပြီးမည်)
+  // 🚀 6 THREADS DIRECT FAST ENGINE (လိုင်း ၆ လိုင်း တစ်ပြိုင်နက်ဆွဲပြီး တိုက်ရိုက် ရေးချမည့်စနစ်)
   Future<void> _downloadMultiPartDirect(DownloadItem item, int totalBytes) async {
     item.sizeBytes = totalBytes;
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
@@ -365,7 +364,8 @@ class DownloadEngine extends ChangeNotifier {
       raf.truncateSync(totalBytes);
     } catch (_) {}
 
-    const numThreads = 4;
+    // ⚡ Thread အရေအတွက်ကို 6 သို့ တိုးမြှင့်သတ်မှတ်ခြင်း
+    const numThreads = 6;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
       final s = i * partSize;
@@ -411,7 +411,7 @@ class DownloadEngine extends ChangeNotifier {
 
         await for (var chunk in resp) {
           if (item.isPaused || item.isCanceled) break;
-          // ဖိုင်ထဲသို့ သက်ဆိုင်ရာ နေရာအတိုင်း တိုက်ရိုက် ရေးချခြင်း (ဖိုင်ပြန်ဆက်စရာ မလိုတော့ပါ)
+          // RandomAccessFile ဖြင့် File ၏ သက်ဆိုင်ရာနေရာသို့ တိုက်ရိုက်ရေးချခြင်း (Merging မလိုပါ)
           raf.setPositionSync(writePos);
           raf.writeFromSync(chunk);
           writePos += chunk.length;
@@ -437,7 +437,7 @@ class DownloadEngine extends ChangeNotifier {
       return;
     }
 
-    // ⚡ ဒေါင်းလုဒ် 100% ပြည့်သည်နှင့် တန်းပြီး Complete ဖြစ်စေခြင်း (၀.၀၀၁ စက္ကန့်)
+    // ⚡ ၁၀၀% ပြီးဆုံးသည်နှင့် ချက်ချင်း Rename လုပ်ကာ Complete ဖြစ်စေခြင်း (၀.၀၀၁ စက္ကန့်)
     if (finalFile.existsSync()) {
       try { finalFile.deleteSync(); } catch (_) {}
     }
