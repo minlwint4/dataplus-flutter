@@ -86,6 +86,30 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     }
   }
 
+  // 💾 ဖုန်း Storage အချက်အလက်များကို WebView ထဲသို့ လှမ်းပို့ပေးသည့် စနစ်
+  Future<void> _sendStorageToWeb() async {
+    await _engine.updateStorageInfo();
+    final storageData = jsonEncode({
+      'free': _engine.freeStorageBytes,
+      'total': _engine.totalStorageBytes,
+      'sdAvailable': _engine.isSdAvailable,
+      'sdFree': _engine.freeSdBytes,
+      'sdTotal': _engine.totalSdBytes,
+      'target': _engine.storageTarget,
+    });
+    try {
+      await _controller.runJavaScript('''
+        (function() {
+          if (window.setAppStorageInfo) {
+            window.setAppStorageInfo($storageData);
+          } else {
+            window.DP_DEVICE_STORAGE = $storageData;
+          }
+        })();
+      ''');
+    } catch (_) {}
+  }
+
   void _initWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -103,6 +127,18 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
         'DataPlusDownloadBridge',
         onMessageReceived: (JavaScriptMessage message) {
           _processIncomingDownloadLinks(message.message);
+        },
+      )
+      // 💾 Storage Channel ချိတ်ဆက်ခြင်း
+      ..addJavaScriptChannel(
+        'DataPlusStorageBridge',
+        onMessageReceived: (JavaScriptMessage message) async {
+          final msg = message.message.trim();
+          if (msg.startsWith('target:')) {
+            final target = msg.substring(7);
+            await _engine.setStorageTarget(target);
+          }
+          _sendStorageToWeb();
         },
       )
       ..setNavigationDelegate(
@@ -132,6 +168,8 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             if (_isLoading) {
               setState(() => _isLoading = false);
             }
+
+            await _sendStorageToWeb();
 
             await _controller.runJavaScript('''
               (function() {
@@ -228,19 +266,16 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ⚡ PopScope ဖြင့် Android Back ခလုတ်နှိပ်ခြင်းကို ဖမ်းယူကိုင်တွယ်ခြင်း
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) async {
         if (didPop) return;
 
-        // ၁။ WebView ထဲတွင် နောက်သို့ ပြန်ဆုတ်ရန် စာမျက်နှာရှိပါက အရင်စာမျက်နှာဆီသို့ ပြန်သွားမည်
         if (await _controller.canGoBack()) {
           await _controller.goBack();
           return;
         }
 
-        // ၂။ မူလ Home စာမျက်နှာသို့ ရောက်နေပါက ၂ စက္ကန့်အတွင်း ၂ ကြိမ်နှိပ်မှ ထွက်မည့် စနစ်
         final now = DateTime.now();
         if (_lastBackPressTime == null ||
             now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
@@ -267,7 +302,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           return;
         }
 
-        // ၃။ ၂ ကြိမ် ဆက်တိုက် နှိပ်ပါက App မှ ပုံမှန်အတိုင်း ထွက်မည်
         SystemNavigator.pop();
       },
       child: Scaffold(
