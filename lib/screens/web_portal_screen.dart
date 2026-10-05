@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -18,99 +19,71 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   late final WebViewController _controller;
   final DownloadEngine _engine = DownloadEngine();
   bool _isLoading = true;
+  bool _isConnectionError = false;
   DateTime? _lastBackPressTime;
+
+  // 🌐 ချိတ်ဆက်စမ်းသပ်မည့် ဆာဗာ IP (၂) ခု
+  static const List<String> _servers = [
+    'http://10.10.10.10:1000',
+    'http://192.168.1.50:1000',
+  ];
+  String _activeBaseUrl = 'http://10.10.10.10:1000';
 
   static const String _userNameFilePath = '/storage/emulated/0/Download/DataPlus/user_name.txt';
 
   @override
   void initState() {
     super.initState();
-    _initWebView();
+    _initController();
+    _connectToFastestServer();
   }
 
-  Future<void> _saveUserNamePermanently(String name) async {
-    final cleanName = name.trim();
-    if (cleanName.isEmpty) return;
-    try {
-      final dir = Directory('/storage/emulated/0/Download/DataPlus');
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
-      final file = File(_userNameFilePath);
-      await file.writeAsString(cleanName);
-    } catch (_) {}
-  }
-
-  Future<String?> _getSavedUserName() async {
-    try {
-      final file = File(_userNameFilePath);
-      if (await file.exists()) {
-        final name = (await file.readAsString()).trim();
-        if (name.isNotEmpty) return name;
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  void _processIncomingDownloadLinks(String payload) {
-    if (payload.trim().isEmpty) return;
-
-    List<String> rawUrls = [];
-    try {
-      final decoded = jsonDecode(payload);
-      if (decoded is List) {
-        rawUrls = decoded.map((e) => e.toString().trim()).where((u) => u.isNotEmpty).toList();
-      }
-    } catch (_) {
-      rawUrls = payload
-          .split(RegExp(r'[\r\n,]+'))
-          .map((e) => e.trim())
-          .where((u) => u.isNotEmpty)
-          .toList();
-    }
-
-    List<String> finalUrls = rawUrls.map((u) {
-      if (!u.startsWith('http')) {
-        if (u.startsWith('/')) {
-          return 'http://10.10.10.10:1000$u';
-        } else {
-          return 'http://10.10.10.10:1000/$u';
-        }
-      }
-      return u;
-    }).where((u) => u.startsWith('http')).toList();
-
-    if (finalUrls.isNotEmpty) {
-      _engine.addUrls(finalUrls);
-      widget.onTabChangeRequested?.call(1);
-    }
-  }
-
-  // 💾 ဖုန်း Storage အချက်အလက်များကို WebView ထဲသို့ လှမ်းပို့ပေးသည့် စနစ်
-  Future<void> _sendStorageToWeb() async {
-    await _engine.updateStorageInfo();
-    final storageData = jsonEncode({
-      'free': _engine.freeStorageBytes,
-      'total': _engine.totalStorageBytes,
-      'sdAvailable': _engine.isSdAvailable,
-      'sdFree': _engine.freeSdBytes,
-      'sdTotal': _engine.totalSdBytes,
-      'target': _engine.storageTarget,
+  // ⚡ IP နှစ်ခုစလုံးကို တစ်ပြိုင်နက်လှမ်းခေါ်ပြီး အရင်ဆုံး မိသည့် IP ကို ရွေးချယ်ချိတ်ဆက်ခြင်း
+  Future<void> _connectToFastestServer() async {
+    setState(() {
+      _isLoading = true;
+      _isConnectionError = false;
     });
-    try {
-      await _controller.runJavaScript('''
-        (function() {
-          if (window.setAppStorageInfo) {
-            window.setAppStorageInfo($storageData);
+
+    final completer = Completer<String>();
+    final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1200);
+    int failedCount = 0;
+
+    for (final host in _servers) {
+      () async {
+        try {
+          final req = await client.getUrl(Uri.parse('$host/api/cart/count'));
+          final resp = await req.close();
+          if (resp.statusCode == HttpStatus.ok && !completer.isCompleted) {
+            completer.complete(host);
           } else {
-            window.DP_DEVICE_STORAGE = $storageData;
+            failedCount++;
           }
-        })();
-      ''');
-    } catch (_) {}
+        } catch (_) {
+          failedCount++;
+        }
+        if (failedCount >= _servers.length && !completer.isCompleted) {
+          // နှစ်ခုစလုံး ချက်ချင်း မမိပါက မူရင်း 10.10.10.10 ကို Default ထားမည်
+          completer.complete(_servers.first);
+        }
+      }();
+    }
+
+    // ၁.၅ စက္ကန့်အတွင်း မည်သည့် IP မှ မတက်လာပါက Safeguard
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (!completer.isCompleted) {
+        completer.complete(_servers.first);
+      }
+    });
+
+    final selectedHost = await completer.future;
+    client.close();
+
+    _activeBaseUrl = selectedHost;
+    _controller.loadRequest(Uri.parse('$_activeBaseUrl/'));
   }
 
-  void _initWebView() {
+  void _initController() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0A0A0A))
@@ -129,7 +102,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           _processIncomingDownloadLinks(message.message);
         },
       )
-      // 💾 Storage Channel ချိတ်ဆက်ခြင်း
       ..addJavaScriptChannel(
         'DataPlusStorageBridge',
         onMessageReceived: (JavaScriptMessage message) async {
@@ -163,10 +135,29 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             }
             return NavigationDecision.navigate;
           },
-          onPageStarted: (String url) {},
+          onWebResourceError: (WebResourceError error) {
+            // စာမျက်နှာဖွင့်မရပါက Retry Screen ပြသရန်
+            if (error.isForMainFrame ?? true) {
+              setState(() {
+                _isLoading = false;
+                _isConnectionError = true;
+              });
+            }
+          },
+          onPageStarted: (String url) {
+            setState(() {
+              _isConnectionError = false;
+            });
+          },
           onPageFinished: (String url) async {
             if (_isLoading) {
               setState(() => _isLoading = false);
+            }
+
+            // လက်ရှိ မိနေသော Server Host URL အတိုင်း အချက်အလက်ပို့ခြင်း
+            final currentUri = Uri.tryParse(url);
+            if (currentUri != null && currentUri.host.isNotEmpty) {
+              _activeBaseUrl = '${currentUri.scheme}://${currentUri.host}:${currentUri.port}';
             }
 
             await _sendStorageToWeb();
@@ -260,8 +251,94 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             }
           },
         ),
-      )
-      ..loadRequest(Uri.parse('http://10.10.10.10:1000/'));
+      );
+  }
+
+  void _processIncomingDownloadLinks(String payload) {
+    if (payload.trim().isEmpty) return;
+
+    List<String> rawUrls = [];
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is List) {
+        rawUrls = decoded.map((e) => e.toString().trim()).where((u) => u.isNotEmpty).toList();
+      }
+    } catch (_) {
+      rawUrls = payload
+          .split(RegExp(r'[\r\n,]+'))
+          .map((e) => e.trim())
+          .where((u) => u.isNotEmpty)
+          .toList();
+    }
+
+    // ⚡ 10.10.10.10 သို့မဟုတ် 192.168.1.50 မည်သည့်လင့်ခ်ပါလာပါစေ လက်ရှိ မိနေသည့် _activeBaseUrl သို့ အလိုအလျောက် ပြောင်းပေးခြင်း
+    List<String> finalUrls = rawUrls.map((u) {
+      String link = u;
+      if (!link.startsWith('http')) {
+        link = link.startsWith('/') ? '$_activeBaseUrl$link' : '$_activeBaseUrl/$link';
+      } else {
+        // IP တစ်ခုခု ပါလာပါက လက်ရှိမိနေသော IP သို့ ညှိပေးခြင်း
+        for (final server in _servers) {
+          if (link.startsWith(server)) {
+            link = link.replaceFirst(server, _activeBaseUrl);
+            break;
+          }
+        }
+      }
+      return link;
+    }).where((u) => u.startsWith('http')).toList();
+
+    if (finalUrls.isNotEmpty) {
+      _engine.addUrls(finalUrls);
+      widget.onTabChangeRequested?.call(1);
+    }
+  }
+
+  Future<void> _sendStorageToWeb() async {
+    await _engine.updateStorageInfo();
+    final storageData = jsonEncode({
+      'free': _engine.freeStorageBytes,
+      'total': _engine.totalStorageBytes,
+      'sdAvailable': _engine.isSdAvailable,
+      'sdFree': _engine.freeSdBytes,
+      'sdTotal': _engine.totalSdBytes,
+      'target': _engine.storageTarget,
+    });
+    try {
+      await _controller.runJavaScript('''
+        (function() {
+          if (window.setAppStorageInfo) {
+            window.setAppStorageInfo($storageData);
+          } else {
+            window.DP_DEVICE_STORAGE = $storageData;
+          }
+        })();
+      ''');
+    } catch (_) {}
+  }
+
+  Future<void> _saveUserNamePermanently(String name) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return;
+    try {
+      final dir = Directory('/storage/emulated/0/Download/DataPlus');
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final file = File(_userNameFilePath);
+      await file.writeAsString(cleanName);
+    } catch (_) {}
+  }
+
+  Future<String?> _getSavedUserName() async {
+    try {
+      final file = File(_userNameFilePath);
+      if (await file.exists()) {
+        final name = (await file.readAsString()).trim();
+        if (name.isNotEmpty) return name;
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -313,6 +390,46 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               if (_isLoading)
                 const Center(
                   child: CircularProgressIndicator(color: Color(0xFF00E676)),
+                ),
+              // ⚠️ Wi-Fi မမိသေးပါက ပြသမည့် Retry Button
+              if (_isConnectionError && !_isLoading)
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E2E),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.orangeAccent),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'ဆာဗာသို့ ချိတ်ဆက်မရပါ',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '10.10.10.10 သို့မဟုတ် 192.168.1.50 ဆာဗာ Wi-Fi သို့ ချိတ်ဆက်ထားပါသလား စစ်ဆေးပါ',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _connectToFastestServer,
+                          icon: const Icon(Icons.refresh, color: Colors.black),
+                          label: const Text('ပြန်လည်ချိတ်ဆက်မည်', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00E676),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
             ],
           ),
