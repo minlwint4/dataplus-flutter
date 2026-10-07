@@ -63,13 +63,11 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           failedCount++;
         }
         if (failedCount >= _servers.length && !completer.isCompleted) {
-          // နှစ်ခုစလုံး ချက်ချင်း မမိပါက မူရင်း 10.10.10.10 ကို Default ထားမည်
           completer.complete(_servers.first);
         }
       }();
     }
 
-    // ၁.၅ စက္ကန့်အတွင်း မည်သည့် IP မှ မတက်လာပါက Safeguard
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (!completer.isCompleted) {
         completer.complete(_servers.first);
@@ -136,7 +134,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             return NavigationDecision.navigate;
           },
           onWebResourceError: (WebResourceError error) {
-            // စာမျက်နှာဖွင့်မရပါက Retry Screen ပြသရန်
             if (error.isForMainFrame ?? true) {
               setState(() {
                 _isLoading = false;
@@ -154,7 +151,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               setState(() => _isLoading = false);
             }
 
-            // လက်ရှိ မိနေသော Server Host URL အတိုင်း အချက်အလက်ပို့ခြင်း
             final currentUri = Uri.tryParse(url);
             if (currentUri != null && currentUri.host.isNotEmpty) {
               _activeBaseUrl = '${currentUri.scheme}://${currentUri.host}:${currentUri.port}';
@@ -271,13 +267,11 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           .toList();
     }
 
-    // ⚡ 10.10.10.10 သို့မဟုတ် 192.168.1.50 မည်သည့်လင့်ခ်ပါလာပါစေ လက်ရှိ မိနေသည့် _activeBaseUrl သို့ အလိုအလျောက် ပြောင်းပေးခြင်း
     List<String> finalUrls = rawUrls.map((u) {
       String link = u;
       if (!link.startsWith('http')) {
         link = link.startsWith('/') ? '$_activeBaseUrl$link' : '$_activeBaseUrl/$link';
       } else {
-        // IP တစ်ခုခု ပါလာပါက လက်ရှိမိနေသော IP သို့ ညှိပေးခြင်း
         for (final server in _servers) {
           if (link.startsWith(server)) {
             link = link.replaceFirst(server, _activeBaseUrl);
@@ -348,11 +342,21 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
       onPopInvokedWithResult: (bool didPop, Object? result) async {
         if (didPop) return;
 
+        // 🌟 ၁။ WebView ထဲတွင် ရောက်ခဲ့သော Previous Page (History) ရှိမရှိ စစ်ဆေးပြီး ရှိပါက ၎င်းဆီသို့ ပြန်ဆုတ်မည်
+        final currentUrl = await _controller.currentUrl() ?? '';
+        final uri = Uri.tryParse(currentUrl);
+        final path = uri?.path ?? '';
+
+        // အကယ်၍ Home ('/' သို့မဟုတ် '') ဖြစ်မနေဘဲ အထဲက Page ရောက်နေပါက Back လုပ်မည်
         if (await _controller.canGoBack()) {
-          await _controller.goBack();
-          return;
+          // Home စာမျက်နှာမဟုတ်လျှင် Back သို့ ဆုတ်ခွင့်ပြုမည်
+          if (path.isNotEmpty && path != '/' && path != '/?') {
+            await _controller.goBack();
+            return;
+          }
         }
 
+        // 🌟 ၂။ Home (အစဆုံးစာမျက်နှာ) သို့ ရောက်ရှိသွားမှသာ App ထွက်ရန် ၂ ချက်နှိပ်သည့် စနစ်ကို သုံးမည်
         final now = DateTime.now();
         if (_lastBackPressTime == null ||
             now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
@@ -391,7 +395,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                 const Center(
                   child: CircularProgressIndicator(color: Color(0xFF00E676)),
                 ),
-              // ⚠️ Wi-Fi မမိသေးပါက ပြသမည့် Retry Button
               if (_isConnectionError && !_isLoading)
                 Center(
                   child: Container(
