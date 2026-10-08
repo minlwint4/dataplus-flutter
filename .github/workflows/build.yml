@@ -22,12 +22,11 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Configure Maven Central Mirror (Bypass 429 Rate Limit)
+    - name: Configure Maven Central Mirror
       run: |
         mkdir -p ~/.gradle/init.d
         cat << 'EOF' > ~/.gradle/init.d/mirror.init.gradle
         def mirrorUrl = "https://maven-central.storage-download.googleapis.com/maven2/"
-
         allprojects {
             buildscript {
                 repositories {
@@ -61,7 +60,7 @@ jobs:
         channel: 'stable'
         cache: true
 
-    - name: Configure Android Project & Fix Kotlin Version
+    - name: Configure Android Project
       run: |
         echo "Generating fresh Android Project structure..."
         rm -rf android
@@ -73,34 +72,7 @@ jobs:
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
 
-        python3 -c "
-        import os, re
-
-        sg = 'android/settings.gradle'
-        if os.path.exists(sg):
-            with open(sg, 'r', encoding='utf-8') as f:
-                c = f.read()
-            c = re.sub(r'(id\s*[\'\"\(]org\.jetbrains\.kotlin\.android[\'\"\)]\s+version\s+[\'\"])[^\'\"]+([\'\"])', r'\g<1>1.9.24\g<2>', c)
-            with open(sg, 'w', encoding='utf-8') as f:
-                f.write(c)
-
-        bg = 'android/build.gradle'
-        if os.path.exists(bg):
-            with open(bg, 'r', encoding='utf-8') as f:
-                c = f.read()
-            c = re.sub(r'ext\.kotlin_version\s*=\s*[\'\"][^\'\"]*[\'\"]', \"ext.kotlin_version = '1.9.24'\", c)
-            c = re.sub(r'org\.jetbrains\.kotlin:kotlin-gradle-plugin:[\d\.]+', 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24', c)
-            if 'ext.kotlin_version' not in c:
-                if 'buildscript {' in c:
-                    c = c.replace('buildscript {', \"buildscript {\n    ext.kotlin_version = '1.9.24'\")
-                else:
-                    c = \"buildscript {\n    ext.kotlin_version = '1.9.24'\n}\n\" + c
-            
-            if 'resolutionStrategy.eachDependency' not in c:
-                c += \"\nallprojects {\n    configurations.all {\n        resolutionStrategy.eachDependency { details ->\n            if (details.requested.group == 'org.jetbrains.kotlin') {\n                details.useVersion '1.9.24'\n            }\n        }\n    }\n}\n\"
-            with open(bg, 'w', encoding='utf-8') as f:
-                f.write(c)
-        "
+        sed -i "s/id 'org.jetbrains.kotlin.android' version '[0-9.]*'/id 'org.jetbrains.kotlin.android' version '1.9.24'/" android/settings.gradle || true
 
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
@@ -209,7 +181,7 @@ jobs:
           '    }' \
           '}' > android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
 
-    # 🌟 ဒီအပိုင်းက ပျက်စီးနေသော Cache အဟောင်းများကို ရှင်းထုတ်ပြီး Package များကို အသစ်ပြန်ဆွဲပေးမည်ဖြစ်သည်
+    # 🌟 Cache များကို အတင်းရှင်းလင်းမည့် အဆင့်
     - name: Clear Cache and Install Dependencies
       run: |
         flutter clean
