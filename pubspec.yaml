@@ -16,12 +16,6 @@ dependencies:
   video_player: ^2.9.2
   chewie: ^1.8.5
 
-# 🌟 Force the build to use the updated version, overriding the conflicting one.
-dependency_overrides:
-  package_info_plus: ^10.2.2
-  path: ^1.9.0
-  meta: ^1.15.0
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
