@@ -11,8 +11,13 @@ const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (Platform.isAndroid) {
+    // 🌟 Android 10 အောက်များအတွက်
     if (!await Permission.storage.isGranted) {
       await Permission.storage.request();
+    }
+    // 🌟 Android 11 နှင့်အထက်များအတွက် Full Storage Access တောင်းခံခြင်း
+    if (!await Permission.manageExternalStorage.isGranted) {
+      await Permission.manageExternalStorage.request();
     }
   }
   runApp(const DataPlusApp());
