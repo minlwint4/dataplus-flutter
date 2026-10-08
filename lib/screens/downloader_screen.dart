@@ -65,6 +65,263 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
+  // 🌟 Settings & Update Dialog
+  void _showStorageSettingDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E232B),
+            title: const Row(
+              children: [
+                Icon(Icons.settings_suggest, color: Color(0xFF58A6FF), size: 22),
+                SizedBox(width: 8),
+                Text("Settings & Update", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("ဒေါင်းလုဒ် သိမ်းဆည်းမည့်နေရာ:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                RadioListTile<String>(
+                  value: 'internal',
+                  groupValue: engine.storageTarget,
+                  activeColor: const Color(0xFF00E676),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text("📱 ဖုန်း Storage (Internal)", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                  subtitle: Text("လက်ကျန်: ${_formatBytes(engine.freeStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                  onChanged: (val) {
+                    if (val != null) {
+                      engine.setStorageTarget(val);
+                      setModalState(() {});
+                      setState(() {});
+                    }
+                  },
+                ),
+                RadioListTile<String>(
+                  value: 'sdcard',
+                  groupValue: engine.storageTarget,
+                  activeColor: const Color(0xFF00E676),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Row(
+                    children: [
+                      const Text("💾 SD ကတ် (Memory Card)", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                      if (!engine.isSdAvailable)
+                        const Text(" (မရှိပါ)", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
+                    ],
+                  ),
+                  subtitle: Text(
+                    engine.isSdAvailable ? "လက်ကျန်: ${_formatBytes(engine.freeSdBytes)}" : "ဖုန်းထဲတွင် SD ကတ် ထည့်မထားပါ",
+                    style: TextStyle(color: engine.isSdAvailable ? const Color(0xFF8B949E) : const Color(0xFFF85149), fontSize: 11),
+                  ),
+                  onChanged: engine.isSdAvailable
+                      ? (val) {
+                          if (val != null) {
+                            engine.setStorageTarget(val);
+                            setModalState(() {});
+                            setState(() {});
+                          }
+                        }
+                      : null,
+                ),
+                const Divider(color: Color(0xFF30363D), height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("App Version", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        Text("v1.0", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                      ],
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF238636),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        MainNavigationScreen.checkLocalServerUpdate(context, isManual: true);
+                      },
+                      icon: const Icon(Icons.refresh, size: 14, color: Colors.white),
+                      label: const Text("Update စစ်မည်", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    )
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("ပိတ်မည်", style: TextStyle(color: Color(0xFF8B949E))),
+              )
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // 🌟 Add Download Links Dialog
+  void _showAddLinksDialog() {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E232B),
+        title: const Row(
+          children: [
+            Icon(Icons.add_link, color: Color(0xFF238636), size: 22),
+            SizedBox(width: 8),
+            Text("Add Download Links", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("ဒေါင်းလုဒ် Link များ ထည့်သွင်းပါ:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final data = await Clipboard.getData('text/plain');
+                      if (data?.text != null) {
+                        textController.text = data!.text!;
+                      }
+                    },
+                    icon: const Icon(Icons.content_paste, size: 16, color: Color(0xFF58A6FF)),
+                    label: const Text("Paste", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 12)),
+                  )
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: textController,
+                maxLines: 5,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF0D1117),
+                  hintText: "ဒီနေရာတွင် Link များကို ကူးထည့်ပါ...",
+                  hintStyle: const TextStyle(color: Color(0xFF484F58), fontSize: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF30363D))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF238636))),
+                ),
+              )
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF238636)),
+            onPressed: () {
+              final text = textController.text.trim();
+              final urls = text.split('\n').map((e) => e.trim()).where((e) => e.startsWith('http')).toList();
+              Navigator.pop(ctx);
+              if (urls.isNotEmpty) {
+                engine.addUrls(urls);
+              }
+            },
+            child: const Text("Queue ထဲ ထည့်မည်", style: TextStyle(color: Colors.white)),
+          )
+        ],
+      ),
+    );
+  }
+
+  // 🌟 Confirm Delete Dialog
+  Future<void> _confirmDeleteFinished({
+    required List<DownloadItem> items,
+    required String title,
+  }) async {
+    bool deleteActualFile = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E232B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          title: Row(
+            children: [
+              const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 22),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                items.length == 1
+                    ? "'${items.first.name}' ကို ဖျက်ရန် သေချာပါသလား?"
+                    : "ရွေးချယ်ထားသော (${items.length}) ဖိုင်ကို ဖျက်ရန် သေချာပါသလား?",
+                style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141A22),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF30363D)),
+                ),
+                child: CheckboxListTile(
+                  value: deleteActualFile,
+                  activeColor: const Color(0xFFF85149),
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  title: const Text(
+                    "With file (ဖိုင်ပါ အပြီးဖျက်မည်)",
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    "အမှန်ခြစ်ပါက ဖုန်း/SD ထဲမှ မူရင်းဖိုင်ပါ အပြီးတိုင် ဖျက်ပစ်ပါမည်",
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
+                  ),
+                  onChanged: (val) {
+                    setDialogState(() {
+                      deleteActualFile = val ?? false;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("မဖျက်ပါ", style: TextStyle(color: Color(0xFF8B949E))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB91C1C),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("ဖျက်မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      engine.deleteFinishedItems(items, deleteActualFile: deleteActualFile);
+      setState(() {});
+    }
+  }
+
   Future<void> _openDownloadedFile(DownloadItem item) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
@@ -124,11 +381,33 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           (currentTab == 'Queue' && d.status != 'finished')
         ).toList();
 
+        final selectedList = currentList.where((d) => d.isSelected).toList();
+
         final isInternalActive = engine.storageTarget == 'internal';
         final isSdActive = engine.storageTarget == 'sdcard';
 
         return Scaffold(
           backgroundColor: const Color(0xFF101317),
+          // 🌟 AppBar with Settings Button
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF16222F),
+            elevation: 0,
+            title: const Text("DataPlus Download Manager", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_suggest, color: Color(0xFF58A6FF)),
+                onPressed: _showStorageSettingDialog,
+                tooltip: "Settings",
+              ),
+            ],
+          ),
+          // 🌟 Floating Action Button to Add Links
+          floatingActionButton: FloatingActionButton(
+            backgroundColor: const Color(0xFF238636),
+            onPressed: _showAddLinksDialog,
+            tooltip: "Add Link",
+            child: const Icon(Icons.add, color: Colors.white),
+          ),
           body: SafeArea(
             child: Column(
               children: [
@@ -295,6 +574,33 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
+                // 🌟 Batch Action Bar (ရွေးချယ်ထားပါက ဖျက်ရန် ခလုတ်ပေါ်လာမည်)
+                if (selectedList.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF21262D),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("ရွေးချယ်ထားသည်: (${selectedList.length})", style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFB91C1C),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            minimumSize: Size.zero,
+                          ),
+                          onPressed: () => _confirmDeleteFinished(items: selectedList, title: "ဖိုင်များကို ဖျက်မည်"),
+                          icon: const Icon(Icons.delete, size: 14, color: Colors.white),
+                          label: const Text("အကုန်ဖျက်မည်", style: TextStyle(color: Colors.white, fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // List Items with Full Action Buttons
                 Expanded(
                   child: currentList.isEmpty
@@ -343,10 +649,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                           ),
                                         IconButton(
                                           icon: const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
-                                          onPressed: () {
-                                            engine.deleteFinishedItems([item], deleteActualFile: false);
-                                            setState(() {});
-                                          },
+                                          onPressed: () => _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်ခြင်း"),
                                           tooltip: "ဖျက်မည်",
                                         ),
                                       ],
