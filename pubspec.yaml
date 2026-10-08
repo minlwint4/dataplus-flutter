@@ -13,8 +13,12 @@ dependencies:
   path_provider: ^2.1.4
   permission_handler: ^11.3.1
   open_filex: ^4.5.0
-  video_player: ^2.9.1      # 🎬 In-App Video Player
-  chewie: ^1.8.5            # 🎬 Video Player UI (Controls)
+  video_player: ^2.9.2
+  chewie: ^1.8.5
+
+# 🌟 ဤအပိုင်းသည် Build Error ကို အပြီးတိုင် ဖြေရှင်းပေးမည့်အပိုင်း ဖြစ်သည်
+dependency_overrides:
+  package_info_plus: ^10.2.2
 
 dev_dependencies:
   flutter_test:
