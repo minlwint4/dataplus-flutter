@@ -13,8 +13,8 @@ dependencies:
   path_provider: ^2.1.4
   permission_handler: ^11.3.1
   open_filex: ^4.5.0
-  video_player: ^2.9.2
-  chewie: ^1.8.5
+  video_player: ^2.9.1      # 🎬 In-App Video Player
+  chewie: ^1.8.5            # 🎬 Video Player UI (Controls)
 
 dev_dependencies:
   flutter_test:
