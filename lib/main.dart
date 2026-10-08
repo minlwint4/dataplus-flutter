@@ -6,7 +6,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'screens/web_portal_screen.dart';
 import 'screens/downloader_screen.dart';
 
-// 🚀 GitHub Actions မှ ထည့်ပေးလိုက်သော Dynamic Version (ဥပမာ 1.0.55)
 const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
 
 void main() async {
@@ -38,7 +37,6 @@ class DataPlusApp extends StatelessWidget {
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
-  // 🚀 DownloaderScreen ဘက်က လှမ်းခေါ်နိုင်မည့် Static Method
   static Future<void> checkLocalServerUpdate(BuildContext context, {bool isManual = false}) async {
     try {
       final client = HttpClient();
