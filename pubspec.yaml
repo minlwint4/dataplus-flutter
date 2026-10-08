@@ -16,10 +16,6 @@ dependencies:
   video_player: ^2.9.2
   chewie: ^1.8.5
 
-# 🌟 ဤအပိုင်းသည် Build Error ကို အပြီးတိုင် ဖြေရှင်းပေးမည့်အပိုင်း ဖြစ်သည်
-dependency_overrides:
-  package_info_plus: ^10.2.2
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
