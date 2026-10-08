@@ -72,43 +72,16 @@ jobs:
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
 
-        # 🌟 Python script ကို သီးသန့်ဖိုင်ဆောက်ပြီး Run ခြင်း (Quotation Error လုံးဝမဖြစ်တော့ပါ)
-        cat << 'EOF' > fix_kotlin.py
-        import os, re
+        # 🌟 Clean & Safesed commands to update Kotlin version without YAML syntax errors
+        if [ -f "android/settings.gradle" ]; then
+          sed -i 's/version ".*"/version "1.9.24"/g' android/settings.gradle
+        fi
 
-        kotlin_version = '1.9.24'
-
-        sg = 'android/settings.gradle'
-        if os.path.exists(sg):
-            with open(sg, 'r', encoding='utf-8') as f:
-                c = f.read()
-            c = re.sub(r'(id\s*[\'\"\(]org\.jetbrains\.kotlin\.android[\'\"\)]\s+version\s+[\'\"])[^\'\"]+([\'\"])', r'\g<1>1.9.24\g<2>', c)
-            with open(sg, 'w', encoding='utf-8') as f:
-                f.write(c)
-
-        bg = 'android/build.gradle'
-        if os.path.exists(bg):
-            with open(bg, 'r', encoding='utf-8') as f:
-                c = f.read()
-            c = re.sub(r'ext\.kotlin_version\s*=\s*[\'\"][^\'\"]*[\'\"]', f"ext.kotlin_version = '{kotlin_version}'", c)
-            c = re.sub(r'org\.jetbrains\.kotlin:kotlin-gradle-plugin:[\d\.]+', f'org.jetbrains.kotlin:kotlin-gradle-plugin:{kotlin_version}', c)
-            
-            if 'ext.kotlin_version' not in c:
-                if 'buildscript {' in c:
-                    c = c.replace('buildscript {', f"buildscript {{\n    ext.kotlin_version = '{kotlin_version}'")
-                else:
-                    c = f"buildscript {{\n    ext.kotlin_version = '{kotlin_version}'\n}}\n" + c
-            
-            if 'resolutionStrategy.eachDependency' not in c:
-                c += f"\nallprojects {{\n    configurations.all {{\n        resolutionStrategy.eachDependency {{ details ->\n            if (details.requested.group == 'org.jetbrains.kotlin') {{\n                details.useVersion '{kotlin_version}'\n            }}\n        }}\n    }}\n}}\n"
-            
-            with open(bg, 'w', encoding='utf-8') as f:
-                f.write(c)
-        print('Kotlin version successfully forced to 1.9.24 without breaking Android plugin')
-        EOF
-
-        python3 fix_kotlin.py
-        rm fix_kotlin.py
+        if [ -f "android/build.gradle" ]; then
+          echo "ext.kotlin_version = '1.9.24'" >> android/build.gradle
+        else
+          echo "ext.kotlin_version = '1.9.24'" > android/build.gradle
+        fi
 
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
