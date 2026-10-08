@@ -29,7 +29,8 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   ];
   String _activeBaseUrl = 'http://10.10.10.10:1000';
 
-  static const String _userNameFilePath = '/storage/emulated/0/Download/DataPlus/user_name.txt';
+  // 🌟 .Dataplus ဖိုဒါလမ်းကြောင်းအသစ်
+  static const String _userNameFilePath = '/storage/emulated/0/.Dataplus/user_name.txt';
 
   @override
   void initState() {
@@ -38,7 +39,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _connectToFastestServer();
   }
 
-  // ⚡ IP နှစ်ခုစလုံးကို တစ်ပြိုင်နက်လှမ်းခေါ်ပြီး အရင်ဆုံး မိသည့် IP ကို ရွေးချယ်ချိတ်ဆက်ခြင်း
   Future<void> _connectToFastestServer() async {
     setState(() {
       _isLoading = true;
@@ -315,7 +315,8 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return;
     try {
-      final dir = Directory('/storage/emulated/0/Download/DataPlus');
+      // 🌟 .Dataplus ဖိုဒါလမ်းကြောင်းအသစ်
+      final dir = Directory('/storage/emulated/0/.Dataplus');
       if (!await dir.exists()) {
         await dir.create(recursive: true);
       }
@@ -342,21 +343,17 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
       onPopInvokedWithResult: (bool didPop, Object? result) async {
         if (didPop) return;
 
-        // 🌟 ၁။ WebView ထဲတွင် ရောက်ခဲ့သော Previous Page (History) ရှိမရှိ စစ်ဆေးပြီး ရှိပါက ၎င်းဆီသို့ ပြန်ဆုတ်မည်
         final currentUrl = await _controller.currentUrl() ?? '';
         final uri = Uri.tryParse(currentUrl);
         final path = uri?.path ?? '';
 
-        // အကယ်၍ Home ('/' သို့မဟုတ် '') ဖြစ်မနေဘဲ အထဲက Page ရောက်နေပါက Back လုပ်မည်
         if (await _controller.canGoBack()) {
-          // Home စာမျက်နှာမဟုတ်လျှင် Back သို့ ဆုတ်ခွင့်ပြုမည်
           if (path.isNotEmpty && path != '/' && path != '/?') {
             await _controller.goBack();
             return;
           }
         }
 
-        // 🌟 ၂။ Home (အစဆုံးစာမျက်နှာ) သို့ ရောက်ရှိသွားမှသာ App ထွက်ရန် ၂ ချက်နှိပ်သည့် စနစ်ကို သုံးမည်
         final now = DateTime.now();
         if (_lastBackPressTime == null ||
             now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
