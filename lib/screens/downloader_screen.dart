@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import '../services/download_engine.dart';
 import '../main.dart'; 
-import 'video_player_screen.dart';
 
 class DownloaderScreen extends StatefulWidget {
   const DownloaderScreen({super.key});
@@ -230,6 +229,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
+  // 🌟 ပြင်ပ Player (MX Player, VLC) ဖြင့် ဖွင့်မည့် အပိုင်း
   Future<void> _openDownloadedFile(DownloadItem item) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
@@ -243,32 +243,24 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         file = altFile;
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ ဖိုင်မတွေ့ရှိပါ')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ ဖုန်းထဲတွင် ဖိုင်မတွေ့ရှိတော့ပါ။ ဖျက်လိုက်ပြီလား စစ်ဆေးပါ။')));
         }
         return;
       }
     }
 
     final lower = item.name.toLowerCase();
-
-    if (lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.avi')) {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoPlayerScreen(
-              videoFile: file,
-              videoTitle: item.name,
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
     String mimeType = '*/*';
+    
+    // ဖိုင်အမျိုးအစား ခွဲခြားခြင်း
     if (lower.endsWith('.apk')) {
       mimeType = 'application/vnd.android.package-archive';
+    } else if (lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.avi')) {
+      mimeType = 'video/*';
+    } else if (lower.endsWith('.jpg') || lower.endsWith('.png') || lower.endsWith('.jpeg')) {
+      mimeType = 'image/*';
+    } else if (lower.endsWith('.mp3') || lower.endsWith('.m4a') || lower.endsWith('.wav')) {
+      mimeType = 'audio/*';
     }
 
     try {
@@ -772,9 +764,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                           Text(
                                             item.status == 'queued' ? "စောင့်ဆိုင်းနေသည်" : "${item.speed}  •  ${item.eta}",
                                             style: TextStyle(
-                                              color: isPaused
-                                                  ? const Color(0xFFE3B341)
-                                                  : (item.status == 'queued' ? const Color(0xFF58A6FF) : const Color(0xFF00E676)),
+                                              color: item.status == 'error' 
+                                                  ? const Color(0xFFFF4444)
+                                                  : isPaused
+                                                      ? const Color(0xFFE3B341)
+                                                      : (item.status == 'queued' ? const Color(0xFF58A6FF) : const Color(0xFF00E676)),
                                               fontWeight: FontWeight.bold,
                                               fontSize: 11,
                                             ),
@@ -788,7 +782,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                       child: LinearProgressIndicator(
                                         value: item.progress,
                                         backgroundColor: const Color(0xFF1E232B),
-                                        color: isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676),
+                                        color: item.status == 'error' 
+                                            ? const Color(0xFFFF4444) 
+                                            : isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676),
                                         minHeight: 4,
                                       ),
                                     )
