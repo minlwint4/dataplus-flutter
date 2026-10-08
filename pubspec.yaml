@@ -9,25 +9,23 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
-  # 🌟 Package အားလုံးကို နောက်ဆုံးထွက် Version အသစ်များသို့ မြှင့်တင်ထားသည်
   webview_flutter: ^4.10.0
-  path_provider: ^2.1.5
-  permission_handler: ^11.4.0
+  path_provider: ^2.1.4
+  permission_handler: ^11.3.1
   open_filex: ^4.5.0
-  video_player: ^2.9.5
-  chewie: ^1.10.0
-  package_info_plus: ^10.2.2  # Android Error ကို ရှင်းပေးမည့်ဗားရှင်း
+  video_player: ^2.9.2
+  chewie: ^1.8.5
 
-# 🌟 flutter_test နှင့် မငြိအောင် အတင်းအကျပ် ညှိပေးထားခြင်း
+# 🌟 ဖြေရှင်းချက်-
+# 10.x ဗားရှင်းကို မသုံးတော့ဘဲ Dart 3.5.0 နဲ့ ကိုက်ညီတဲ့ အဟောင်းဆုံးပေမယ့် Error ကင်းတဲ့ 
+# 9.0.3 ဗားရှင်းကို အတင်းအကျပ် သုံးခိုင်းလိုက်ခြင်းဖြစ်ပါသည်။
 dependency_overrides:
-  meta: 1.15.0
-  path: 1.9.0
+  package_info_plus: 9.0.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.2
+  flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.13.1
 
 flutter_launcher_icons:
