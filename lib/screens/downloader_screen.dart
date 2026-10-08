@@ -229,14 +229,13 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  // 🌟 ပြင်ပ Player (MX Player, VLC) ဖြင့် ဖွင့်မည့် အပိုင်း
   Future<void> _openDownloadedFile(DownloadItem item) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
 
     if (!await file.exists()) {
       final altFolder = (folder == DownloadEngine.internalDownloadPath)
-          ? '${engine.sdDownloadPath}/.Dataplus'
+          ? '${engine.sdDownloadPath}/Download/.Dataplus'
           : DownloadEngine.internalDownloadPath;
       final altFile = File('$altFolder/${item.name}');
       if (await altFile.exists()) {
@@ -252,7 +251,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final lower = item.name.toLowerCase();
     String mimeType = '*/*';
     
-    // ဖိုင်အမျိုးအစား ခွဲခြားခြင်း
     if (lower.endsWith('.apk')) {
       mimeType = 'application/vnd.android.package-archive';
     } else if (lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.avi')) {
@@ -540,36 +538,36 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ? ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFD97706),
-                              minimumSize: const Size(double.infinity, 38),
+                              minimumSize: const Size(double.infinity, 42),
                               padding: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             onPressed: () => engine.pauseAll(),
-                            icon: const Icon(Icons.pause, color: Colors.white, size: 18),
-                            label: const Text("⏸️ အားလုံး ခေတ္တရပ်မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            icon: const Icon(Icons.pause, color: Colors.white, size: 20),
+                            label: const Text("⏸️ အားလုံး ခေတ္တရပ်မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                           )
                         : ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: engine.isStorageLow ? const Color(0xFFB91C1C) : const Color(0xFF059669),
-                              minimumSize: const Size(double.infinity, 38),
+                              minimumSize: const Size(double.infinity, 42),
                               padding: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             onPressed: () => engine.startAllQueued(),
-                            icon: const Icon(Icons.play_arrow, color: Colors.white, size: 20),
+                            icon: const Icon(Icons.play_arrow, color: Colors.white, size: 22),
                             label: Text(
                               "🚀 စတင်ဒေါင်းမည် ($qCount ဖိုင်)",
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                           ),
                   ),
 
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: isQueueTab ? const Color(0xFF0C1929) : const Color(0xFF0D2418),
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isQueueTab ? const Color(0xFF1D4ED8) : const Color(0xFF059669),
                       width: 0.8,
@@ -582,15 +580,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         children: [
                           Icon(
                             isQueueTab ? Icons.hourglass_top_rounded : Icons.check_circle_rounded,
-                            size: 14,
+                            size: 16,
                             color: isQueueTab ? const Color(0xFF38BDF8) : const Color(0xFF00E676),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Text(
                             isQueueTab ? "QUEUE (ဆိုင်းငံ့စာရင်း - $qCount)" : "FINISHED (ပြီးစီးစာရင်း - $fCount)",
                             style: TextStyle(
                               color: isQueueTab ? const Color(0xFF38BDF8) : const Color(0xFF00E676),
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -599,6 +597,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       if (currentList.isNotEmpty)
                         Row(
                           children: [
+                            // 🌟 Select All / None Button နေရာချဲ့ပေးခြင်း
                             InkWell(
                               onTap: () {
                                 final selectAll = selectedList.length != currentList.length;
@@ -607,19 +606,25 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 }
                                 setState(() {});
                               },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: isQueueTab ? const Color(0xFF1E3A8A) : const Color(0xFF065F46)),
+                                ),
                                 child: Text(
-                                  selectedList.length == currentList.length ? 'None' : 'All',
+                                  selectedList.length == currentList.length ? 'Deselect All' : 'Select All',
                                   style: TextStyle(
                                     color: isQueueTab ? const Color(0xFF93C5FD) : const Color(0xFF86EFAC),
-                                    fontSize: 11,
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 10),
+                            // 🌟 Delete / Clear All Button နေရာချဲ့ပေးခြင်း
                             if (selectedList.isNotEmpty)
                               InkWell(
                                 onTap: () {
@@ -630,9 +635,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                   }
                                 },
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                  decoration: BoxDecoration(color: const Color(0xFFB91C1C), borderRadius: BorderRadius.circular(4)),
-                                  child: Text('Delete (${selectedList.length})', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(color: const Color(0xFFDC2626), borderRadius: BorderRadius.circular(6)),
+                                  child: Text('Delete (${selectedList.length})', style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold)),
                                 ),
                               )
                             else
@@ -644,9 +649,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                     engine.removeAll(currentTab);
                                   }
                                 },
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                  child: Text('Clear All', style: TextStyle(color: Color(0xFFF85149), fontSize: 11, fontWeight: FontWeight.bold)),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(color: const Color(0xFF3F191B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF7F1D1D))),
+                                  child: const Text('Clear All', style: TextStyle(color: Color(0xFFF85149), fontSize: 11.5, fontWeight: FontWeight.bold)),
                                 ),
                               ),
                           ],
@@ -663,18 +669,19 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             children: [
                               Icon(
                                 isQueueTab ? Icons.downloading_outlined : Icons.folder_open_outlined,
-                                size: 36,
+                                size: 48,
                                 color: const Color(0xFF30363D),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 12),
                               Text(
                                 isQueueTab ? "Queue ထဲတွင် ဒေါင်းလုဒ်ဖိုင် မရှိပါ" : "ဒေါင်းပြီးစီးသောဖိုင် မရှိသေးပါ",
-                                style: const TextStyle(color: Color(0xFF6E7681), fontSize: 12.5),
+                                style: const TextStyle(color: Color(0xFF6E7681), fontSize: 14),
                               ),
                             ],
                           ),
                         )
                       : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
                           itemCount: currentList.length,
                           itemBuilder: (context, index) {
                             final item = currentList[index];
@@ -683,64 +690,77 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             final isPaused = item.status == 'paused';
                             final isApk = item.name.toLowerCase().endsWith('.apk');
 
+                            // 🌟 ဖိုင်တစ်ခုချင်းစီကြားမှာ Margin ထည့်ပေးပြီး နေရာကျယ်ကျယ် ပေးထားပါသည်
                             return InkWell(
                               onTap: isDone ? () => _openDownloadedFile(item) : null,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF101317),
-                                  border: Border(
-                                    bottom: const BorderSide(color: Color(0xFF1E232B), width: 0.6),
-                                    left: isDone
-                                        ? const BorderSide(color: Color(0xFF00E676), width: 3.0)
-                                        : BorderSide.none,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isDone ? const Color(0xFF00E676).withOpacity(0.4) : const Color(0xFF1E232B),
+                                    width: 1,
                                   ),
                                 ),
                                 child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
                                       children: [
                                         SizedBox(
-                                          width: 24,
-                                          height: 24,
+                                          width: 30,
+                                          height: 30,
                                           child: Checkbox(
                                             value: item.isSelected,
                                             activeColor: isDone ? const Color(0xFF00E676) : const Color(0xFF2563EB),
                                             onChanged: (v) => setState(() => item.isSelected = v ?? false),
                                           ),
                                         ),
-                                        const SizedBox(width: 4),
+                                        const SizedBox(width: 8),
                                         if (isDone)
-                                          Icon(isApk ? Icons.android : Icons.check_circle, color: const Color(0xFF00E676), size: 18)
+                                          Icon(isApk ? Icons.android : Icons.check_circle, color: const Color(0xFF00E676), size: 22)
                                         else if (isDl)
                                           InkWell(
                                             onTap: () => engine.togglePauseResume(item),
-                                            child: const Icon(Icons.pause_circle_filled, color: Color(0xFFE3B341), size: 20),
+                                            child: const Icon(Icons.pause_circle_filled, color: Color(0xFFE3B341), size: 26),
                                           )
                                         else if (isPaused)
                                           InkWell(
                                             onTap: () => engine.togglePauseResume(item),
-                                            child: const Icon(Icons.play_circle_fill, color: Color(0xFF58A6FF), size: 20),
+                                            child: const Icon(Icons.play_circle_fill, color: Color(0xFF58A6FF), size: 26),
                                           )
                                         else
-                                          const Icon(Icons.access_time, color: Color(0xFF8B949E), size: 18),
-                                        const SizedBox(width: 6),
+                                          const Icon(Icons.access_time, color: Color(0xFF8B949E), size: 22),
+                                        
+                                        const SizedBox(width: 12),
+                                        
                                         Expanded(
-                                          child: Text(item.name, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12.5)),
+                                          child: Text(item.name, overflow: TextOverflow.ellipsis, maxLines: 1, style: const TextStyle(color: Colors.white, fontSize: 13.5)),
                                         ),
+                                        
+                                        const SizedBox(width: 8),
+                                        
+                                        // 🌟 Open / Install ခလုတ်ကို ကြီးကြီးမားမား ဖြစ်အောင် ပြင်ထားသည်
                                         if (isDone)
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: isApk ? const Color(0xFF1E40AF) : const Color(0xFF047857),
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                               minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                             ),
                                             onPressed: () => _openDownloadedFile(item),
-                                            icon: Icon(isApk ? Icons.system_update : Icons.play_arrow, size: 13, color: Colors.white),
-                                            label: Text(isApk ? "သွင်းမည်" : "ဖွင့်မည်", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                            icon: Icon(isApk ? Icons.system_update : Icons.play_arrow, size: 16, color: Colors.white),
+                                            label: Text(isApk ? "သွင်းမည်" : "ဖွင့်မည်", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                           ),
+                                        
+                                        const SizedBox(width: 8),
+                                        
+                                        // 🌟 Delete (X) ခလုတ်ကို နှိပ်ရလွယ်အောင် နေရာချဲ့ထားသည်
                                         InkWell(
+                                          borderRadius: BorderRadius.circular(20),
                                           onTap: () {
                                             if (!isQueueTab) {
                                               _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်မည်");
@@ -749,18 +769,19 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                             }
                                           },
                                           child: const Padding(
-                                            padding: EdgeInsets.all(4.0),
-                                            child: Icon(Icons.close, color: Color(0xFF8B949E), size: 16),
+                                            padding: EdgeInsets.all(8.0),
+                                            child: Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
                                           ),
                                         )
                                       ],
                                     ),
+                                    const SizedBox(height: 6),
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.only(left: 42, right: 6, bottom: 4),
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5)),
+                                          Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                                           Text(
                                             item.status == 'queued' ? "စောင့်ဆိုင်းနေသည်" : "${item.speed}  •  ${item.eta}",
                                             style: TextStyle(
@@ -770,22 +791,25 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                                       ? const Color(0xFFE3B341)
                                                       : (item.status == 'queued' ? const Color(0xFF58A6FF) : const Color(0xFF00E676)),
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 11,
+                                              fontSize: 11.5,
                                             ),
                                           ),
-                                          Text(item.date, style: const TextStyle(color: Color(0xFF6E7681), fontSize: 10)),
+                                          Text(item.date, style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11)),
                                         ],
                                       ),
                                     ),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(2),
-                                      child: LinearProgressIndicator(
-                                        value: item.progress,
-                                        backgroundColor: const Color(0xFF1E232B),
-                                        color: item.status == 'error' 
-                                            ? const Color(0xFFFF4444) 
-                                            : isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676),
-                                        minHeight: 4,
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 42, right: 6),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: LinearProgressIndicator(
+                                          value: item.progress,
+                                          backgroundColor: const Color(0xFF1E232B),
+                                          color: item.status == 'error' 
+                                              ? const Color(0xFFFF4444) 
+                                              : isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676),
+                                          minHeight: 5,
+                                        ),
                                       ),
                                     )
                                   ],
