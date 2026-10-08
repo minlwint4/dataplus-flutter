@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import '../services/download_engine.dart';
-import '../main.dart'; // 🚀 Version & Update Checker ခေါ်ယူရန်
-import 'video_player_screen.dart'; // 🎬 In-App Video Player အတွက်
+import '../main.dart'; 
+import 'video_player_screen.dart';
 
 class DownloaderScreen extends StatefulWidget {
   const DownloaderScreen({super.key});
@@ -45,7 +45,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // ⚙️ Storage & App Update Settings Dialog
   void _showStorageSettingDialog() {
     showDialog(
       context: context,
@@ -111,7 +110,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 ),
                 const Divider(color: Color(0xFF30363D), height: 18),
 
-                // 🚀 App Version & Check Update Button
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -253,7 +251,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
     final lower = item.name.toLowerCase();
 
-    // 🎬 ဗီဒီယိုဖိုင်ဖြစ်ပါက In-App Player ဖြင့် ဖွင့်မည်
     if (lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.avi')) {
       if (mounted) {
         Navigator.push(
@@ -269,7 +266,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       return;
     }
 
-    // 📦 APK သို့မဟုတ် အခြားဖိုင်များဖြစ်ပါက Install လုပ်ရန် မူလအတိုင်း Intent ဖြင့်ဖွင့်မည်
     String mimeType = '*/*';
     if (lower.endsWith('.apk')) {
       mimeType = 'application/vnd.android.package-archive';
@@ -383,7 +379,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 💾 ဖုန်း STORAGE နှင့် SD ကတ် Slim Card
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -546,7 +541,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // 🚀 Queue Start/Pause Banner
                 if (isQueueTab && qCount > 0)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -578,7 +572,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                   ),
 
-                // 🌟 Queue / Finished Distinct Header
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -670,7 +663,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // 📋 List View
                 Expanded(
                   child: currentList.isEmpty
                       ? Center(
@@ -808,7 +800,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                 ),
 
-                // 🔻 Bottom Bar
                 Container(
                   color: const Color(0xFF1E232B),
                   padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
