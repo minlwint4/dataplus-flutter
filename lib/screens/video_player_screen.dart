@@ -38,9 +38,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         videoPlayerController: _videoPlayerController,
         autoPlay: true,
         looping: false,
-        fullScreenByDefault: true, // ဝင်တာနဲ့ Fullscreen တန်းဖြစ်မည်
+        fullScreenByDefault: true,
         allowFullScreen: true,
-        allowedScreenSleep: false, // ဇာတ်ကားကြည့်နေစဉ် ဖုန်းစခရင်မပိတ်စေရန်
+        allowedScreenSleep: false,
         deviceOrientationsOnEnterFullScreen: [
           DeviceOrientation.landscapeRight,
           DeviceOrientation.landscapeLeft,
@@ -69,7 +69,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void dispose() {
     _videoPlayerController.dispose();
     _chewieController?.dispose();
-    // Player ပိတ်လိုက်ပါက Screen အနေအထားကို မူလအတိုင်း ပြန်ထားရန်
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
   }
