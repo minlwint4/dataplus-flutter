@@ -11,11 +11,9 @@ const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (Platform.isAndroid) {
-    // 🌟 Android 10 အောက်များအတွက်
     if (!await Permission.storage.isGranted) {
       await Permission.storage.request();
     }
-    // 🌟 Android 11 နှင့်အထက်များအတွက် Full Storage Access တောင်းခံခြင်း
     if (!await Permission.manageExternalStorage.isGranted) {
       await Permission.manageExternalStorage.request();
     }
@@ -43,22 +41,35 @@ class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
   static Future<void> checkLocalServerUpdate(BuildContext context, {bool isManual = false}) async {
+    HttpClient? client;
     try {
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 3);
+      client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 4);
+      
       final req = await client.getUrl(Uri.parse('http://10.10.10.10:1000/api/app_version'));
       final resp = await req.close();
 
       if (resp.statusCode == 200) {
         final body = await resp.transform(utf8.decoder).join();
         final data = jsonDecode(body);
-        final String serverVersionName = data['version_name'] ?? '';
+        
+        final String serverVersionName = data['version_name'] ?? '1.0.0';
+        final int serverVersionCode = data['version_code'] ?? 999;
+        
         final String apkUrl = data['apk_url'] ?? 'http://10.10.10.10:1000/api/download/apk?app=dataplus';
         final String changelog = data['changelog'] ?? 'လုပ်ဆောင်ချက်အသစ်များ ပါဝင်ပါသည်';
 
         client.close();
 
-        if (serverVersionName.isNotEmpty && serverVersionName != kAppVersion) {
+        int currentVersionCode = 1;
+        try {
+          final parts = kAppVersion.split('.');
+          if (parts.length >= 3) {
+            currentVersionCode = int.parse(parts.last);
+          }
+        } catch (_) {}
+
+        if (serverVersionCode > currentVersionCode) {
           if (context.mounted) {
             _showUpdateDialog(context, serverVersionName, apkUrl, changelog);
           }
@@ -78,10 +89,13 @@ class MainNavigationScreen extends StatefulWidget {
           );
         }
       }
-    } catch (_) {
+    } catch (e) {
+      try {
+        client?.close();
+      } catch (_) {}
       if (isManual && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ Local Server (10.10.10.10) နှင့် မချိတ်ဆက်မိပါ')),
+          SnackBar(content: Text('⚠️ ချိတ်ဆက်မှု အမှား: $e')),
         );
       }
     }
@@ -160,7 +174,7 @@ class MainNavigationScreen extends StatefulWidget {
       final resp = await req.close();
       final total = resp.contentLength;
 
-      final saveDir = Directory('/storage/emulated/0/Download/DataPlus');
+      final saveDir = Directory('/storage/emulated/0/Download/.Dataplus');
       if (!await saveDir.exists()) {
         await saveDir.create(recursive: true);
       }
