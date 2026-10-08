@@ -37,7 +37,8 @@ class DownloadEngine extends ChangeNotifier {
     updateStorageInfo();
   }
 
-  static const String internalDownloadPath = '/storage/emulated/0/Download/DataPlus';
+  // 🌟 Hidden Folder လမ်းကြောင်း (အစက် . ပါရမည်)
+  static const String internalDownloadPath = '/storage/emulated/0/.Dataplus';
   String sdDownloadPath = '';
 
   String storageTarget = 'internal';
@@ -57,9 +58,21 @@ class DownloadEngine extends ChangeNotifier {
 
   String get currentActivePath {
     if (storageTarget == 'sdcard' && isSdAvailable && sdDownloadPath.isNotEmpty) {
-      return '$sdDownloadPath/DataPlus';
+      return '$sdDownloadPath/.Dataplus'; // 🌟 SD ကတ်တွင်လည်း Hidden လုပ်မည်
     }
     return internalDownloadPath;
+  }
+
+  // 🌟 Folder နှင့် .nomedia ကို အလိုအလျောက် ဆောက်ပေးမည့် Function
+  Future<void> _ensureDirectoryAndNoMedia(String path) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    final noMedia = File('${dir.path}/.nomedia');
+    if (!await noMedia.exists()) {
+      try { await noMedia.create(); } catch (_) {}
+    }
   }
 
   Future<void> updateStorageInfo() async {
@@ -79,11 +92,7 @@ class DownloadEngine extends ChangeNotifier {
           storageTarget = 'internal';
         }
 
-        final dir = Directory(currentActivePath);
-        if (!await dir.exists()) {
-          await dir.create(recursive: true);
-        }
-
+        await _ensureDirectoryAndNoMedia(currentActivePath);
         notifyListeners();
       }
     } catch (_) {}
@@ -92,10 +101,9 @@ class DownloadEngine extends ChangeNotifier {
   Future<void> setStorageTarget(String target) async {
     if (target == 'sdcard' && !isSdAvailable) return;
     storageTarget = target;
-    final dir = Directory(currentActivePath);
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
+    
+    await _ensureDirectoryAndNoMedia(currentActivePath);
+
     for (var item in downloads) {
       if (item.status == 'queued' || item.status == 'paused') {
         item.savePath = currentActivePath;
@@ -227,7 +235,7 @@ class DownloadEngine extends ChangeNotifier {
           try { file.deleteSync(); } catch (_) {}
         }
         final altFolder = (folder == internalDownloadPath)
-            ? '$sdDownloadPath/DataPlus'
+            ? '$sdDownloadPath/.Dataplus'
             : internalDownloadPath;
         final altFile = File('$altFolder/${item.name}');
         if (altFile.existsSync()) {
@@ -291,6 +299,7 @@ class DownloadEngine extends ChangeNotifier {
       notifyListeners();
 
       try {
+        await _ensureDirectoryAndNoMedia(item.savePath);
         await _downloadSmartEngine(item);
         if (!item.isPaused && !item.isCanceled) {
           item.status = 'finished';
@@ -348,7 +357,6 @@ class DownloadEngine extends ChangeNotifier {
     client.close();
   }
 
-  // 🚀 8 THREADS DIRECT FAST ENGINE (လိုင်း ၈ လိုင်း တစ်ပြိုင်နက်ဆွဲပြီး Direct Write ရေးချမည့်စနစ်)
   Future<void> _downloadMultiPartDirect(DownloadItem item, int totalBytes) async {
     item.sizeBytes = totalBytes;
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
@@ -360,11 +368,8 @@ class DownloadEngine extends ChangeNotifier {
     }
 
     final raf = await tempFile.open(mode: FileMode.write);
-    try {
-      raf.truncateSync(totalBytes);
-    } catch (_) {}
+    try { raf.truncateSync(totalBytes); } catch (_) {}
 
-    // ⚡ Thread အရေအတွက်ကို 8 သို့ သတ်မှတ်ထားခြင်း
     const numThreads = 5;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
@@ -411,7 +416,6 @@ class DownloadEngine extends ChangeNotifier {
 
         await for (var chunk in resp) {
           if (item.isPaused || item.isCanceled) break;
-          // RandomAccessFile ဖြင့် File ၏ သက်ဆိုင်ရာနေရာသို့ တိုက်ရိုက်ရေးချခြင်း (Merging မလိုပါ)
           raf.setPositionSync(writePos);
           raf.writeFromSync(chunk);
           writePos += chunk.length;
@@ -437,7 +441,6 @@ class DownloadEngine extends ChangeNotifier {
       return;
     }
 
-    // ⚡ ၁၀၀% ပြီးဆုံးသည်နှင့် ချက်ချင်း Rename လုပ်ကာ Complete ဖြစ်စေခြင်း (၀.၀၀၁ စက္ကန့်)
     if (finalFile.existsSync()) {
       try { finalFile.deleteSync(); } catch (_) {}
     }
