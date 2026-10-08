@@ -41,63 +41,63 @@ class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
   static Future<void> checkLocalServerUpdate(BuildContext context, {bool isManual = false}) async {
+    // 🌟 LAN IP နှစ်ခုစလုံးကို အစဉ်လိုက် လှည့်ပတ်စစ်ဆေးမည်
+    final possibleIps = ['192.168.1.50', '10.10.10.10', 'localhost'];
     HttpClient? client;
-    try {
-      client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 4);
-      
-      final req = await client.getUrl(Uri.parse('http://10.10.10.10:1000/api/app_version'));
-      final resp = await req.close();
-
-      if (resp.statusCode == 200) {
-        final body = await resp.transform(utf8.decoder).join();
-        final data = jsonDecode(body);
-        
-        final String serverVersionName = data['version_name'] ?? '1.0.0';
-        final int serverVersionCode = data['version_code'] ?? 999;
-        
-        final String apkUrl = data['apk_url'] ?? 'http://10.10.10.10:1000/api/download/apk?app=dataplus';
-        final String changelog = data['changelog'] ?? 'လုပ်ဆောင်ချက်အသစ်များ ပါဝင်ပါသည်';
-
-        client.close();
-
-        int currentVersionCode = 1;
-        try {
-          final parts = kAppVersion.split('.');
-          if (parts.length >= 3) {
-            currentVersionCode = int.parse(parts.last);
-          }
-        } catch (_) {}
-
-        if (serverVersionCode > currentVersionCode) {
-          if (context.mounted) {
-            _showUpdateDialog(context, serverVersionName, apkUrl, changelog);
-          }
-        } else if (isManual && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ နောက်ဆုံးထွက် ဗားရှင်း ($kAppVersion) ကို အသုံးပြုနေပါသည်'),
-              backgroundColor: const Color(0xFF238636),
-            ),
-          );
-        }
-      } else {
-        client.close();
-        if (isManual && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('⚠️ Server မှ Version အချက်အလက် မရရှိပါ')),
-          );
-        }
-      }
-    } catch (e) {
+    
+    for (var ip in possibleIps) {
       try {
-        client?.close();
-      } catch (_) {}
-      if (isManual && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('⚠️ ချိတ်ဆက်မှု အမှား: $e')),
-        );
+        client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 2);
+        
+        final req = await client.getUrl(Uri.parse('http://$ip:1000/api/app_version'));
+        final resp = await req.close();
+
+        if (resp.statusCode == 200) {
+          final body = await resp.transform(utf8.decoder).join();
+          final data = jsonDecode(body);
+          
+          final String serverVersionName = data['version_name'] ?? '1.0.0';
+          final dynamic rawCode = data['version_code'] ?? 999;
+          final int serverVersionCode = rawCode is int ? rawCode : int.tryParse(rawCode.toString()) ?? 999;
+          
+          final String apkUrl = data['apk_url'] ?? 'http://$ip:1000/api/download/apk?app=dataplus';
+          final String changelog = data['changelog'] ?? 'လုပ်ဆောင်ချက်အသစ်များ ပါဝင်ပါသည်';
+
+          client.close();
+
+          int currentVersionCode = 1;
+          try {
+            final parts = kAppVersion.split('.');
+            if (parts.length >= 3) {
+              currentVersionCode = int.parse(parts.last);
+            }
+          } catch (_) {}
+
+          if (serverVersionCode > currentVersionCode) {
+            if (context.mounted) {
+              _showUpdateDialog(context, serverVersionName, apkUrl, changelog);
+            }
+          } else if (isManual && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ နောက်ဆုံးထွက် ဗားရှင်း ($kAppVersion) ကို အသုံးပြုနေပါသည် ($ip)'),
+                backgroundColor: const Color(0xFF238636),
+              ),
+            );
+          }
+          return;
+        }
+        client.close();
+      } catch (_) {
+        try { client?.close(); } catch (_) {}
       }
+    }
+
+    if (isManual && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ Server သို့ ချိတ်ဆက်၍မရပါ (IP လိပ်စာများကို စစ်ဆေးပါ)')),
+      );
     }
   }
 
