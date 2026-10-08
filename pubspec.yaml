@@ -16,12 +16,6 @@ dependencies:
   video_player: ^2.9.2
   chewie: ^1.8.5
 
-# 🌟 ဖြေရှင်းချက်-
-# 10.x ဗားရှင်းကို မသုံးတော့ဘဲ Dart 3.5.0 နဲ့ ကိုက်ညီတဲ့ အဟောင်းဆုံးပေမယ့် Error ကင်းတဲ့ 
-# 9.0.3 ဗားရှင်းကို အတင်းအကျပ် သုံးခိုင်းလိုက်ခြင်းဖြစ်ပါသည်။
-dependency_overrides:
-  package_info_plus: 9.0.3
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
