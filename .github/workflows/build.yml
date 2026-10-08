@@ -60,7 +60,7 @@ jobs:
         channel: 'stable'
         cache: true
 
-    - name: Configure Android Project & Force Kotlin 1.9.24
+    - name: Configure Android Project & Permissions
       run: |
         echo "Generating fresh Android Project structure..."
         rm -rf android
@@ -72,41 +72,15 @@ jobs:
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
 
-        # 🌟 ဒီအပိုင်းက Kotlin Version ကို 1.9.24 သို့ အတင်းအကျပ် မြှင့်တင်ပေးမည့် အပိုင်းဖြစ်သည်
-        python3 -c "
-        import os, re
+        if [ -f "android/settings.gradle" ]; then
+          sed -i 's/org.jetbrains.kotlin.android" version "[^"]*"/org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle
+        fi
 
-        # Update settings.gradle (For Flutter 3.19+ standard)
-        sg = 'android/settings.gradle'
-        if os.path.exists(sg):
-            with open(sg, 'r', encoding='utf-8') as f:
-                c = f.read()
-            c = re.sub(r'(id\s*[\'\"\(]org\.jetbrains\.kotlin\.android[\'\"\)]\s+version\s+[\'\"])[^\'\"]+([\'\"])', r'\g<1>1.9.24\g<2>', c)
-            with open(sg, 'w', encoding='utf-8') as f:
-                f.write(c)
-
-        # Update build.gradle (For Flutter backward compatibility and sub-projects)
-        bg = 'android/build.gradle'
-        if os.path.exists(bg):
-            with open(bg, 'r', encoding='utf-8') as f:
-                c = f.read()
-            # Force ext.kotlin_version
-            c = re.sub(r'ext\.kotlin_version\s*=\s*[\'\"][^\'\"]*[\'\"]', \"ext.kotlin_version = '1.9.24'\", c)
-            c = re.sub(r'org\.jetbrains\.kotlin:kotlin-gradle-plugin:[\d\.]+', 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24', c)
-            
-            if 'ext.kotlin_version' not in c:
-                if 'buildscript {' in c:
-                    c = c.replace('buildscript {', \"buildscript {\n    ext.kotlin_version = '1.9.24'\")
-                else:
-                    c = \"buildscript {\n    ext.kotlin_version = '1.9.24'\n}\n\" + c
-            
-            # Force ALL sub-projects to use Kotlin 1.9.24 (Crucial Fix for webview_flutter)
-            if 'resolutionStrategy.eachDependency' not in c:
-                c += \"\nallprojects {\n    configurations.all {\n        resolutionStrategy.eachDependency { details ->\n            if (details.requested.group == 'org.jetbrains.kotlin') {\n                details.useVersion '1.9.24'\n            }\n        }\n    }\n}\n\"
-            
-            with open(bg, 'w', encoding='utf-8') as f:
-                f.write(c)
-        "
+        if [ -f "android/build.gradle" ]; then
+          echo "ext.kotlin_version = '1.9.24'" >> android/build.gradle
+        else
+          echo "ext.kotlin_version = '1.9.24'" > android/build.gradle
+        fi
 
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
@@ -117,6 +91,7 @@ jobs:
           '    <root-path name="root" path="." />' \
           '</paths>' > android/app/src/main/res/xml/filepaths.xml
 
+        # 🌟 Zapya ကာကွယ်ရေးအတွက် Storage Permissions များနှင့် Cleartext Traffic ထည့်သွင်းခြင်း
         sed -i 's/android:label="[^"]*"/android:label="DATA_PLUS"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
@@ -259,4 +234,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: DATAPLUS_v1.0.${{ github.run_number }}
-        path: build/app/outputs/flutter-apk/dataplus.apk
+        path: build/app/outputs/flutter-apk/app-release.apk
