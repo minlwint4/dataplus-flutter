@@ -158,9 +158,10 @@ class DownloadEngine extends ChangeNotifier {
 
   void startAllQueued() {
     for (var item in downloads) {
-      if (item.status == 'paused') {
+      if (item.status == 'paused' || item.status == 'error') {
         item.status = 'queued';
         item.isPaused = false;
+        item.speed = '0.0 MB/s';
       }
     }
     notifyListeners();
@@ -201,7 +202,7 @@ class DownloadEngine extends ChangeNotifier {
       item.status = 'paused';
       item.speed = 'Paused';
       notifyListeners();
-    } else if (item.status == 'paused') {
+    } else if (item.status == 'paused' || item.status == 'error') {
       item.isPaused = false;
       item.status = 'queued';
       item.speed = 'Resuming...';
@@ -308,7 +309,15 @@ class DownloadEngine extends ChangeNotifier {
       } catch (e) {
         if (!item.isPaused && !item.isCanceled) {
           item.status = 'error';
-          item.speed = 'Error';
+          // 🌟 Error ဖြစ်ရတဲ့ အကြောင်းရင်းအမှန်ကို UI မှာ တိုက်ရိုက်ပြပေးမည်
+          String errorMsg = e.toString().split('\n').first;
+          if (errorMsg.contains('Permission')) {
+            item.speed = "Storage Permission မရှိပါ!";
+          } else if (errorMsg.contains('SocketException') || errorMsg.contains('HttpException')) {
+            item.speed = "Network / Server ပြဿနာ";
+          } else {
+            item.speed = "Error: $errorMsg";
+          }
         }
       }
       notifyListeners();
@@ -323,29 +332,24 @@ class DownloadEngine extends ChangeNotifier {
 
   Future<void> _downloadSmartEngine(DownloadItem item) async {
     final client = HttpClient();
-    int totalBytes = 0;
+    int totalBytes = item.sizeBytes;
     bool canMultiThread = false;
 
     try {
-      final probeReq = await client.getUrl(Uri.parse(item.url));
-      probeReq.headers.add(HttpHeaders.rangeHeader, 'bytes=0-0');
+      // 🌟 HEAD ဖြင့်သာ စစ်ဆေးခြင်း (Drain Error မဖြစ်စေရန်)
+      final probeReq = await client.headUrl(Uri.parse(item.url));
       final probeResp = await probeReq.close();
-
-      if (probeResp.statusCode == HttpStatus.partialContent) {
-        final cr = probeResp.headers.value(HttpHeaders.contentRangeHeader);
-        if (cr != null && cr.contains('/')) {
-          final totalStr = cr.split('/').last.trim();
-          final parsed = int.tryParse(totalStr);
-          if (parsed != null && parsed > 0) {
-            totalBytes = parsed;
-            canMultiThread = true;
-          }
-        }
-      } else if (probeResp.statusCode == HttpStatus.ok) {
-        totalBytes = probeResp.contentLength;
+      if (probeResp.headers.value('accept-ranges') == 'bytes') {
+        canMultiThread = true;
       }
-      await probeResp.drain();
+      if (totalBytes <= 0) {
+        totalBytes = probeResp.contentLength > 0 ? probeResp.contentLength : 0;
+      }
     } catch (_) {}
+
+    if (totalBytes > 5 * 1024 * 1024 && !item.name.toLowerCase().endsWith('.apk')) {
+       canMultiThread = true;
+    }
 
     if (!canMultiThread || totalBytes < 5 * 1024 * 1024 || item.name.toLowerCase().endsWith('.apk')) {
       await _downloadSingleStream(item, client, totalBytes);
