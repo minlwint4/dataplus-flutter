@@ -22,14 +22,12 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   bool _isConnectionError = false;
   DateTime? _lastBackPressTime;
 
-  // 🌐 ချိတ်ဆက်စမ်းသပ်မည့် ဆာဗာ IP (၂) ခု
   static const List<String> _servers = [
     'http://10.10.10.10:1000',
     'http://192.168.1.50:1000',
   ];
   String _activeBaseUrl = 'http://10.10.10.10:1000';
 
-  // 🌟 .Dataplus ဖိုဒါလမ်းကြောင်းအသစ်
   static const String _userNameFilePath = '/storage/emulated/0/.Dataplus/user_name.txt';
 
   @override
@@ -315,7 +313,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return;
     try {
-      // 🌟 .Dataplus ဖိုဒါလမ်းကြောင်းအသစ်
       final dir = Directory('/storage/emulated/0/.Dataplus');
       if (!await dir.exists()) {
         await dir.create(recursive: true);
