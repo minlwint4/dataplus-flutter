@@ -209,8 +209,12 @@ jobs:
           '    }' \
           '}' > android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
 
-    - name: Install Dependencies
-      run: flutter pub get
+    # 🌟 ဒီအပိုင်းက ပျက်စီးနေသော Cache အဟောင်းများကို ရှင်းထုတ်ပြီး Package များကို အသစ်ပြန်ဆွဲပေးမည်ဖြစ်သည်
+    - name: Clear Cache and Install Dependencies
+      run: |
+        flutter clean
+        flutter pub cache clean -f
+        flutter pub get
 
     - name: Generate App Launcher Icons
       run: |
