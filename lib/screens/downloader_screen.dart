@@ -33,7 +33,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  // 🌟 Finished Tab ရောက်ပါက Screen လှည့်ခွင့်ပြုခြင်း
+  // 🌟 Finished Tab ရောက်ပါက Screen လှည့်ခွင့်ပြုခြင်း၊ အခြား Tab တွင် Portrait သို့ ပြန်ထားခြင်း
   void _updateOrientations(String tab) {
     if (tab == 'Finished') {
       SystemChrome.setPreferredOrientations([
@@ -359,8 +359,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                           item.status == 'finished' ? "ဒေါင်းလုဒ်ပြီးပါပြီ" : "ဒေါင်းလုဒ်ဆွဲနေသည်... (${(item.progress * 100).toStringAsFixed(0)}%)",
                                           style: TextStyle(color: item.status == 'finished' ? const Color(0xFF00E676) : const Color(0xFF58A6FF), fontSize: 11),
                                         ),
-                                        // 🌟 totalBytes အစား item.size ကို သုံးထားသည်
-                                        Text(_formatBytes(item.size), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                        Text(item.status == 'finished' ? "ပြီးစီး" : "", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                                       ],
                                     ),
                                     if (item.status != 'finished') ...[
