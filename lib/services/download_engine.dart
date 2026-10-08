@@ -73,6 +73,7 @@ class DownloadEngine extends ChangeNotifier {
     }
   }
 
+  // 🌟 Storage စစ်ဆေးပြီးပါက ဖိုဒါထဲရှိ ဖိုင်အဟောင်းများကိုပါ ပြန်ရှာပေးမည်
   Future<void> updateStorageInfo() async {
     try {
       const channel = MethodChannel('com.dataplus/storage');
@@ -91,9 +92,50 @@ class DownloadEngine extends ChangeNotifier {
         }
 
         await _ensureDirectoryAndNoMedia(currentActivePath);
+        await _scanLocalFiles(); // Scan for existing downloads
         notifyListeners();
       }
     } catch (_) {}
+  }
+
+  // 🌟 ဖုန်းထဲတွင် ဒေါင်းပြီးသားဖိုင်များရှိပါက Finished စာရင်းသို့ အလိုလိုသွင်းပေးမည့် Function
+  Future<void> _scanLocalFiles() async {
+    final paths = [internalDownloadPath];
+    if (isSdAvailable && sdDownloadPath.isNotEmpty) {
+      paths.add('$sdDownloadPath/.Dataplus');
+    }
+
+    bool hasNew = false;
+    for (var path in paths) {
+      final dir = Directory(path);
+      if (await dir.exists()) {
+        final files = dir.listSync();
+        for (var f in files) {
+          if (f is File) {
+            final name = f.path.split('/').last;
+            // Temp ဖိုင်များကို ကျော်သွားမည်
+            if (name == '.nomedia' || name.endsWith('.tmp') || name.contains('.part')) continue;
+
+            // စာရင်းထဲတွင် မရှိသေးပါက အသစ်ထည့်မည်
+            if (!downloads.any((d) => d.name == name && d.status == 'finished')) {
+              final stat = f.statSync();
+              downloads.add(DownloadItem(
+                url: 'local_file',
+                name: name,
+                status: 'finished',
+                progress: 1.0,
+                sizeBytes: stat.size,
+                speed: 'COMPLETE ✅',
+                date: "${stat.modified.hour}:${stat.modified.minute.toString().padLeft(2, '0')}",
+                savePath: path,
+              ));
+              hasNew = true;
+            }
+          }
+        }
+      }
+    }
+    if (hasNew) notifyListeners();
   }
 
   Future<void> setStorageTarget(String target) async {
@@ -309,7 +351,6 @@ class DownloadEngine extends ChangeNotifier {
       } catch (e) {
         if (!item.isPaused && !item.isCanceled) {
           item.status = 'error';
-          // 🌟 Error ဖြစ်ရတဲ့ အကြောင်းရင်းအမှန်ကို UI မှာ တိုက်ရိုက်ပြပေးမည်
           String errorMsg = e.toString().split('\n').first;
           if (errorMsg.contains('Permission')) {
             item.speed = "Storage Permission မရှိပါ!";
@@ -336,7 +377,6 @@ class DownloadEngine extends ChangeNotifier {
     bool canMultiThread = false;
 
     try {
-      // 🌟 HEAD ဖြင့်သာ စစ်ဆေးခြင်း (Drain Error မဖြစ်စေရန်)
       final probeReq = await client.headUrl(Uri.parse(item.url));
       final probeResp = await probeReq.close();
       if (probeResp.headers.value('accept-ranges') == 'bytes') {
