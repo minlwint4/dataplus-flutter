@@ -72,16 +72,41 @@ jobs:
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
 
-        # 🌟 Clean & Safesed commands to update Kotlin version without YAML syntax errors
-        if [ -f "android/settings.gradle" ]; then
-          sed -i 's/version ".*"/version "1.9.24"/g' android/settings.gradle
-        fi
+        # 🌟 ဒီအပိုင်းက Kotlin Version ကို 1.9.24 သို့ အတင်းအကျပ် မြှင့်တင်ပေးမည့် အပိုင်းဖြစ်သည်
+        python3 -c "
+        import os, re
 
-        if [ -f "android/build.gradle" ]; then
-          echo "ext.kotlin_version = '1.9.24'" >> android/build.gradle
-        else
-          echo "ext.kotlin_version = '1.9.24'" > android/build.gradle
-        fi
+        # Update settings.gradle (For Flutter 3.19+ standard)
+        sg = 'android/settings.gradle'
+        if os.path.exists(sg):
+            with open(sg, 'r', encoding='utf-8') as f:
+                c = f.read()
+            c = re.sub(r'(id\s*[\'\"\(]org\.jetbrains\.kotlin\.android[\'\"\)]\s+version\s+[\'\"])[^\'\"]+([\'\"])', r'\g<1>1.9.24\g<2>', c)
+            with open(sg, 'w', encoding='utf-8') as f:
+                f.write(c)
+
+        # Update build.gradle (For Flutter backward compatibility and sub-projects)
+        bg = 'android/build.gradle'
+        if os.path.exists(bg):
+            with open(bg, 'r', encoding='utf-8') as f:
+                c = f.read()
+            # Force ext.kotlin_version
+            c = re.sub(r'ext\.kotlin_version\s*=\s*[\'\"][^\'\"]*[\'\"]', \"ext.kotlin_version = '1.9.24'\", c)
+            c = re.sub(r'org\.jetbrains\.kotlin:kotlin-gradle-plugin:[\d\.]+', 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24', c)
+            
+            if 'ext.kotlin_version' not in c:
+                if 'buildscript {' in c:
+                    c = c.replace('buildscript {', \"buildscript {\n    ext.kotlin_version = '1.9.24'\")
+                else:
+                    c = \"buildscript {\n    ext.kotlin_version = '1.9.24'\n}\n\" + c
+            
+            # Force ALL sub-projects to use Kotlin 1.9.24 (Crucial Fix for webview_flutter)
+            if 'resolutionStrategy.eachDependency' not in c:
+                c += \"\nallprojects {\n    configurations.all {\n        resolutionStrategy.eachDependency { details ->\n            if (details.requested.group == 'org.jetbrains.kotlin') {\n                details.useVersion '1.9.24'\n            }\n        }\n    }\n}\n\"
+            
+            with open(bg, 'w', encoding='utf-8') as f:
+                f.write(c)
+        "
 
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
