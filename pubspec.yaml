@@ -15,6 +15,12 @@ dependencies:
   open_filex: ^4.5.0
   video_player: ^2.9.2
   chewie: ^1.8.5
+  package_info_plus: ^10.2.2 # Explicitly add the working version
+
+# 🌟 FORCE RESOLUTION FOR FLUTTER_TEST CONFLICTS
+dependency_overrides:
+  meta: 1.15.0 # Lock to the version flutter_test 3.24.0 requires
+  path: 1.9.0  # Lock to the version flutter_test 3.24.0 requires
 
 dev_dependencies:
   flutter_test:
@@ -32,9 +38,3 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
-
-# 🌟 THE DEFINITIVE FIX:
-# This forces the build to use a version of package_info_plus 
-# that has the Android Gradle fix, but does not conflict with flutter_test
-dependency_overrides:
-  package_info_plus: 9.0.3
