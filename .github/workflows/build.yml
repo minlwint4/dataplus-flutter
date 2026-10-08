@@ -67,7 +67,6 @@ jobs:
         rm -rf android
         flutter create . --org com.example --project-name dataplus_app
 
-        # 🌟 ERROR FIX: Create local.properties manually since it's missing in CI
         mkdir -p android
         echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
         echo "flutter.buildMode=release" >> android/local.properties
@@ -77,7 +76,6 @@ jobs:
         python3 -c "
         import os, re
 
-        # 1. settings.gradle
         sg = 'android/settings.gradle'
         if os.path.exists(sg):
             with open(sg, 'r', encoding='utf-8') as f:
@@ -86,7 +84,6 @@ jobs:
             with open(sg, 'w', encoding='utf-8') as f:
                 f.write(c)
 
-        # 2. root build.gradle
         bg = 'android/build.gradle'
         if os.path.exists(bg):
             with open(bg, 'r', encoding='utf-8') as f:
@@ -105,7 +102,6 @@ jobs:
                 f.write(c)
         "
 
-        # 3. FileProvider အတွက် filepaths.xml ဖန်တီးခြင်း
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
           '<?xml version="1.0" encoding="utf-8"?>' \
@@ -115,14 +111,12 @@ jobs:
           '    <root-path name="root" path="." />' \
           '</paths>' > android/app/src/main/res/xml/filepaths.xml
 
-        # 4. App အမည် DATA_PLUS နှင့် Permissions များ ထည့်သွင်းခြင်း
         sed -i 's/android:label="[^"]*"/android:label="DATA_PLUS"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
 
         sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
 
-        # 5. MethodChannel Kotlin Bridge
         mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
         printf '%s\n' \
           'package com.example.dataplus_app' \
@@ -225,14 +219,12 @@ jobs:
           cp icon.png assets/icon.png
         fi
         if [ -f "assets/icon.png" ]; then
-          echo "Generating Custom App Icons..."
           dart run flutter_launcher_icons
         fi
 
     - name: Ensure Persistent Release Keystore
       run: |
         if [ ! -f "dataplus.jks" ]; then
-          echo "Generating permanent release keystore..."
           keytool -genkey -v -keystore dataplus.jks -alias dataplus -keyalg RSA -keysize 2048 -validity 10000 -storepass dataplus123 -keypass dataplus123 -dname "CN=DataPlus, OU=App, O=DataPlus, L=Yangon, C=MM"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -254,7 +246,6 @@ jobs:
           --build-number=${{ github.run_number }} \
           --dart-define=APP_VERSION=1.0.${{ github.run_number }}
 
-    # ⚡ အောက်ဆုံး Artifact နာမည်တွင် Run Number တိုက်ရိုက် ထည့်သွင်းသတ်မှတ်ခြင်း
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
