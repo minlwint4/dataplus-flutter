@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.5.0 <4.0.0' # 🌟 Dart SDK Version ကို 3.5.0 အထိ တင်ပေးလိုက်ပါသည်
 
 dependencies:
   flutter:
@@ -15,12 +15,8 @@ dependencies:
   open_filex: ^4.5.0
   video_player: ^2.9.2
   chewie: ^1.8.5
-  package_info_plus: ^10.2.2 # Explicitly add the working version
 
-# 🌟 FORCE RESOLUTION FOR FLUTTER_TEST CONFLICTS
-dependency_overrides:
-  meta: 1.15.0 # Lock to the version flutter_test 3.24.0 requires
-  path: 1.9.0  # Lock to the version flutter_test 3.24.0 requires
+# 🌟 package_info_plus နှင့် dependency_overrides အားလုံးကို လုံးဝ ဖယ်ရှားလိုက်ပါပြီ
 
 dev_dependencies:
   flutter_test:
