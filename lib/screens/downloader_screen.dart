@@ -65,7 +65,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  void _openDownloadedFile(DownloadItem item) async {
+  Future<void> _openDownloadedFile(DownloadItem item) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
 
@@ -244,7 +244,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(2),
                                   child: LinearProgressIndicator(
-                                    // 🌟 ပြင်ဆင်ပြီး (totalSdSdBytes အစား totalSdBytes သုံးထားသည်)
                                     value: (engine.isSdAvailable && engine.totalSdBytes > 0) ? (1.0 - (engine.freeSdBytes / engine.totalSdBytes)) : 0.0,
                                     backgroundColor: const Color(0xFF263342),
                                     color: const Color(0xFF00E676),
@@ -273,7 +272,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             minimumSize: const Size.fromHeight(34),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                           ),
-                          // 🌟 ပြင်ဆင်ပြီး (setActiveTab အစား activeTab.value သုံးထားသည်)
                           onPressed: () => engine.activeTab.value = 'Queue',
                           icon: const Icon(Icons.downloading, size: 16),
                           label: Text("Queue ($qCount)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -288,7 +286,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             minimumSize: const Size.fromHeight(34),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                           ),
-                          // 🌟 ပြင်ဆင်ပြီး (setActiveTab အစား activeTab.value သုံးထားသည်)
                           onPressed: () => engine.activeTab.value = 'Finished',
                           icon: const Icon(Icons.check_circle_outline, size: 16),
                           label: Text("Finished ($fCount)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -298,7 +295,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // List Items / Content
+                // List Items with Full Action Buttons
                 Expanded(
                   child: currentList.isEmpty
                       ? Center(
@@ -314,16 +311,68 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             return Card(
                               color: const Color(0xFF161B22),
                               margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              child: ListTile(
-                                dense: true,
-                                title: Text(item.name, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                                subtitle: Text(item.status == 'finished' ? "ဒေါင်းလုဒ်ပြီးပါပြီ" : "${(item.progress * 100).toStringAsFixed(0)}%", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                                trailing: item.status == 'finished'
-                                    ? IconButton(
-                                        icon: const Icon(Icons.play_arrow, color: Color(0xFF00E676)),
-                                        onPressed: () => _openDownloadedFile(item),
-                                      )
-                                    : null,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Checkbox(
+                                          value: item.isSelected,
+                                          activeColor: const Color(0xFF238636),
+                                          onChanged: (val) {
+                                            item.isSelected = val ?? false;
+                                            setState(() {});
+                                          },
+                                        ),
+                                        Expanded(
+                                          child: Text(
+                                            item.name,
+                                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (item.status == 'finished')
+                                          IconButton(
+                                            icon: const Icon(Icons.play_circle_fill, color: Color(0xFF00E676), size: 26),
+                                            onPressed: () => _openDownloadedFile(item),
+                                            tooltip: "ဖွင့်မည်",
+                                          ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
+                                          onPressed: () {
+                                            engine.deleteFinishedItems([item], deleteActualFile: false);
+                                            setState(() {});
+                                          },
+                                          tooltip: "ဖျက်မည်",
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          item.status == 'finished' ? "ဒေါင်းလုဒ်ပြီးပါပြီ" : "ဒေါင်းလုဒ်ဆွဲနေသည်... (${(item.progress * 100).toStringAsFixed(0)}%)",
+                                          style: TextStyle(color: item.status == 'finished' ? const Color(0xFF00E676) : const Color(0xFF58A6FF), fontSize: 11),
+                                        ),
+                                        Text(_formatBytes(item.totalBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                      ],
+                                    ),
+                                    if (item.status != 'finished') ...[
+                                      const SizedBox(height: 6),
+                                      LinearProgressIndicator(
+                                        value: item.progress,
+                                        backgroundColor: const Color(0xFF21262D),
+                                        color: const Color(0xFF58A6FF),
+                                        minHeight: 4,
+                                      ),
+                                    ]
+                                  ],
+                                ),
                               ),
                             );
                           },
