@@ -4,24 +4,30 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.5.0 <4.0.0' # 🌟 Dart SDK Version ကို 3.5.0 အထိ တင်ပေးလိုက်ပါသည်
+  sdk: '>=3.5.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
+  
+  # 🌟 Package အားလုံးကို နောက်ဆုံးထွက် Version အသစ်များသို့ မြှင့်တင်ထားသည်
   webview_flutter: ^4.10.0
-  path_provider: ^2.1.4
-  permission_handler: ^11.3.1
+  path_provider: ^2.1.5
+  permission_handler: ^11.4.0
   open_filex: ^4.5.0
-  video_player: ^2.9.2
-  chewie: ^1.8.5
+  video_player: ^2.9.5
+  chewie: ^1.10.0
+  package_info_plus: ^10.2.2  # Android Error ကို ရှင်းပေးမည့်ဗားရှင်း
 
-# 🌟 package_info_plus နှင့် dependency_overrides အားလုံးကို လုံးဝ ဖယ်ရှားလိုက်ပါပြီ
+# 🌟 flutter_test နှင့် မငြိအောင် အတင်းအကျပ် ညှိပေးထားခြင်း
+dependency_overrides:
+  meta: 1.15.0
+  path: 1.9.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^3.0.2
   flutter_launcher_icons: ^0.13.1
 
 flutter_launcher_icons:
