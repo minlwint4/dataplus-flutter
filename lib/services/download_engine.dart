@@ -37,7 +37,8 @@ class DownloadEngine extends ChangeNotifier {
     updateStorageInfo();
   }
 
-  static const String internalDownloadPath = '/storage/emulated/0/.Dataplus';
+  // 🌟 ဖိုင်သိမ်းမည့်လမ်းကြောင်းကို Download ဖိုဒါအောက်သို့ ပြောင်းလဲထားပါသည်
+  static const String internalDownloadPath = '/storage/emulated/0/Download/.Dataplus';
   String sdDownloadPath = '';
 
   String storageTarget = 'internal';
@@ -57,7 +58,7 @@ class DownloadEngine extends ChangeNotifier {
 
   String get currentActivePath {
     if (storageTarget == 'sdcard' && isSdAvailable && sdDownloadPath.isNotEmpty) {
-      return '$sdDownloadPath/.Dataplus';
+      return '$sdDownloadPath/Download/.Dataplus';
     }
     return internalDownloadPath;
   }
@@ -73,7 +74,6 @@ class DownloadEngine extends ChangeNotifier {
     }
   }
 
-  // 🌟 Storage စစ်ဆေးပြီးပါက ဖိုဒါထဲရှိ ဖိုင်အဟောင်းများကိုပါ ပြန်ရှာပေးမည်
   Future<void> updateStorageInfo() async {
     try {
       const channel = MethodChannel('com.dataplus/storage');
@@ -92,17 +92,16 @@ class DownloadEngine extends ChangeNotifier {
         }
 
         await _ensureDirectoryAndNoMedia(currentActivePath);
-        await _scanLocalFiles(); // Scan for existing downloads
+        await _scanLocalFiles();
         notifyListeners();
       }
     } catch (_) {}
   }
 
-  // 🌟 ဖုန်းထဲတွင် ဒေါင်းပြီးသားဖိုင်များရှိပါက Finished စာရင်းသို့ အလိုလိုသွင်းပေးမည့် Function
   Future<void> _scanLocalFiles() async {
     final paths = [internalDownloadPath];
     if (isSdAvailable && sdDownloadPath.isNotEmpty) {
-      paths.add('$sdDownloadPath/.Dataplus');
+      paths.add('$sdDownloadPath/Download/.Dataplus');
     }
 
     bool hasNew = false;
@@ -113,10 +112,8 @@ class DownloadEngine extends ChangeNotifier {
         for (var f in files) {
           if (f is File) {
             final name = f.path.split('/').last;
-            // Temp ဖိုင်များကို ကျော်သွားမည်
             if (name == '.nomedia' || name.endsWith('.tmp') || name.contains('.part')) continue;
 
-            // စာရင်းထဲတွင် မရှိသေးပါက အသစ်ထည့်မည်
             if (!downloads.any((d) => d.name == name && d.status == 'finished')) {
               final stat = f.statSync();
               downloads.add(DownloadItem(
@@ -276,7 +273,7 @@ class DownloadEngine extends ChangeNotifier {
           try { file.deleteSync(); } catch (_) {}
         }
         final altFolder = (folder == internalDownloadPath)
-            ? '$sdDownloadPath/.Dataplus'
+            ? '$sdDownloadPath/Download/.Dataplus'
             : internalDownloadPath;
         final altFile = File('$altFolder/${item.name}');
         if (altFile.existsSync()) {
