@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 class DownloadItem {
   final String url;
   final String name;
-  String status; // 'queued', 'downloading', 'paused', 'finished', 'error'
+  String status;
   double progress;
   int sizeBytes;
   String speed;
@@ -37,7 +37,6 @@ class DownloadEngine extends ChangeNotifier {
     updateStorageInfo();
   }
 
-  // 🌟 Hidden Folder လမ်းကြောင်း (အစက် . ပါရမည်)
   static const String internalDownloadPath = '/storage/emulated/0/.Dataplus';
   String sdDownloadPath = '';
 
@@ -58,12 +57,11 @@ class DownloadEngine extends ChangeNotifier {
 
   String get currentActivePath {
     if (storageTarget == 'sdcard' && isSdAvailable && sdDownloadPath.isNotEmpty) {
-      return '$sdDownloadPath/.Dataplus'; // 🌟 SD ကတ်တွင်လည်း Hidden လုပ်မည်
+      return '$sdDownloadPath/.Dataplus';
     }
     return internalDownloadPath;
   }
 
-  // 🌟 Folder နှင့် .nomedia ကို အလိုအလျောက် ဆောက်ပေးမည့် Function
   Future<void> _ensureDirectoryAndNoMedia(String path) async {
     final dir = Directory(path);
     if (!await dir.exists()) {
