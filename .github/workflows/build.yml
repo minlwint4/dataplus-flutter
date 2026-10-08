@@ -72,12 +72,12 @@ jobs:
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
 
-        python3 -c "
+        # 🌟 Python script ကို သီးသန့်ဖိုင်ဆောက်ပြီး Run ခြင်း (Quotation Error လုံးဝမဖြစ်တော့ပါ)
+        cat << 'EOF' > fix_kotlin.py
         import os, re
 
         kotlin_version = '1.9.24'
 
-        # 1. 🌟 Correctly target ONLY org.jetbrains.kotlin.android in settings.gradle
         sg = 'android/settings.gradle'
         if os.path.exists(sg):
             with open(sg, 'r', encoding='utf-8') as f:
@@ -86,27 +86,29 @@ jobs:
             with open(sg, 'w', encoding='utf-8') as f:
                 f.write(c)
 
-        # 2. Update build.gradle
         bg = 'android/build.gradle'
         if os.path.exists(bg):
             with open(bg, 'r', encoding='utf-8') as f:
                 c = f.read()
-            c = re.sub(r'ext\.kotlin_version\s*=\s*[\'\"][^\'\"]*[\'\"]', f\"ext.kotlin_version = '{kotlin_version}'\", c)
+            c = re.sub(r'ext\.kotlin_version\s*=\s*[\'\"][^\'\"]*[\'\"]', f"ext.kotlin_version = '{kotlin_version}'", c)
             c = re.sub(r'org\.jetbrains\.kotlin:kotlin-gradle-plugin:[\d\.]+', f'org.jetbrains.kotlin:kotlin-gradle-plugin:{kotlin_version}', c)
             
             if 'ext.kotlin_version' not in c:
                 if 'buildscript {' in c:
-                    c = c.replace('buildscript {', f\"buildscript {{\n    ext.kotlin_version = '{kotlin_version}'\")
+                    c = c.replace('buildscript {', f"buildscript {{\n    ext.kotlin_version = '{kotlin_version}'")
                 else:
-                    c = f\"buildscript {{\n    ext.kotlin_version = '{kotlin_version}'\n}}\n\" + c
+                    c = f"buildscript {{\n    ext.kotlin_version = '{kotlin_version}'\n}}\n" + c
             
             if 'resolutionStrategy.eachDependency' not in c:
-                c += f\"\nallprojects {{\n    configurations.all {{\n        resolutionStrategy.eachDependency {{ details ->\n            if (details.requested.group == 'org.jetbrains.kotlin') {{\n                details.useVersion '{kotlin_version}'\n            }}\n        }}\n    }}\n}}\n\"
+                c += f"\nallprojects {{\n    configurations.all {{\n        resolutionStrategy.eachDependency {{ details ->\n            if (details.requested.group == 'org.jetbrains.kotlin') {{\n                details.useVersion '{kotlin_version}'\n            }}\n        }}\n    }}\n}}\n"
             
             with open(bg, 'w', encoding='utf-8') as f:
                 f.write(c)
         print('Kotlin version successfully forced to 1.9.24 without breaking Android plugin')
-        "
+        EOF
+
+        python3 fix_kotlin.py
+        rm fix_kotlin.py
 
         mkdir -p android/app/src/main/res/xml
         printf '%s\n' \
@@ -141,4 +143,122 @@ jobs:
           'class MainActivity: FlutterActivity() {' \
           '    private val CHANNEL = "com.dataplus/storage"' \
           '    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {' \
-          '        super.configureFlutterEngine(
+          '        super.configureFlutterEngine(flutterEngine)' \
+          '        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->' \
+          '            when (call.method) {' \
+          '                "getStorageSpace" -> {' \
+          '                    try {' \
+          '                        val map = HashMap<String, Any>()' \
+          '                        val internalPath = Environment.getExternalStorageDirectory()' \
+          '                        val internalStat = StatFs(internalPath.path)' \
+          '                        val intBlockSize = internalStat.blockSizeLong' \
+          '                        map["total"] = internalStat.blockCountLong * intBlockSize' \
+          '                        map["free"] = internalStat.availableBlocksLong * intBlockSize' \
+          '                        val externalDirs = getExternalFilesDirs(null)' \
+          '                        var sdFound = false' \
+          '                        if (externalDirs.size > 1 && externalDirs[1] != null) {' \
+          '                            val sdFile = externalDirs[1]' \
+          '                            val isRemovable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {' \
+          '                                Environment.isExternalStorageRemovable(sdFile)' \
+          '                            } else { true }' \
+          '                            if (isRemovable) {' \
+          '                                try {' \
+          '                                    val sdStat = StatFs(sdFile.path)' \
+          '                                    val sdBlockSize = sdStat.blockSizeLong' \
+          '                                    map["sdTotal"] = sdStat.blockCountLong * sdBlockSize' \
+          '                                    map["sdFree"] = sdStat.availableBlocksLong * sdBlockSize' \
+          '                                    map["sdPath"] = sdFile.absolutePath' \
+          '                                    map["sdAvailable"] = true' \
+          '                                    sdFound = true' \
+          '                                } catch (e: Exception) {}' \
+          '                            }' \
+          '                        }' \
+          '                        if (!sdFound) {' \
+          '                            map["sdAvailable"] = false' \
+          '                            map["sdTotal"] = 0L' \
+          '                            map["sdFree"] = 0L' \
+          '                            map["sdPath"] = ""' \
+          '                        }' \
+          '                        result.success(map)' \
+          '                    } catch (e: Exception) {' \
+          '                        result.error("ERROR", e.message, null)' \
+          '                    }' \
+          '                }' \
+          '                "openFile" -> {' \
+          '                    try {' \
+          '                        val filePath = call.argument<String>("path") ?: ""' \
+          '                        val mimeType = call.argument<String>("mimeType") ?: "*/*"' \
+          '                        val file = File(filePath)' \
+          '                        if (!file.exists()) {' \
+          '                            result.error("NOT_FOUND", "File not found", null)' \
+          '                            return@setMethodCallHandler' \
+          '                        }' \
+          '                        val uri = FileProvider.getUriForFile(' \
+          '                            this,' \
+          '                            "${applicationContext.packageName}.fileProvider",' \
+          '                            file' \
+          '                        )' \
+          '                        val intent = Intent(Intent.ACTION_VIEW).apply {' \
+          '                            setDataAndType(uri, mimeType)' \
+          '                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)' \
+          '                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)' \
+          '                        }' \
+          '                        startActivity(intent)' \
+          '                        result.success(true)' \
+          '                    } catch (e: Exception) {' \
+          '                        result.error("ERROR", e.message, null)' \
+          '                    }' \
+          '                }' \
+          '                else -> {' \
+          '                    result.notImplemented()' \
+          '                }' \
+          '            }' \
+          '        }' \
+          '    }' \
+          '}' > android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
+
+    - name: Install Dependencies & Clear Cache
+      run: |
+        flutter clean
+        flutter pub cache clean -f
+        flutter pub get
+
+    - name: Generate App Launcher Icons
+      run: |
+        mkdir -p assets
+        if [ -f "icon.png" ]; then
+          cp icon.png assets/icon.png
+        fi
+        if [ -f "assets/icon.png" ]; then
+          dart run flutter_launcher_icons
+        fi
+
+    - name: Ensure Persistent Release Keystore
+      run: |
+        if [ ! -f "dataplus.jks" ]; then
+          keytool -genkey -v -keystore dataplus.jks -alias dataplus -keyalg RSA -keysize 2048 -validity 10000 -storepass dataplus123 -keypass dataplus123 -dname "CN=DataPlus, OU=App, O=DataPlus, L=Yangon, C=MM"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dataplus.jks
+          git commit -m "chore: persist release signing keystore [skip ci]" || true
+          git push || true
+        fi
+        cp dataplus.jks android/app/dataplus.jks
+
+        if ! grep -q "signingConfigs.release" android/app/build.gradle; then
+          sed -i '/buildTypes {/i \    signingConfigs {\n        release {\n            storeFile file("dataplus.jks")\n            storePassword "dataplus123"\n            keyAlias "dataplus"\n            keyPassword "dataplus123"\n        }\n    }' android/app/build.gradle
+          sed -i -E 's/signingConfig =? signingConfigs\.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
+        fi
+
+    - name: Build APK (Release)
+      run: |
+        flutter build apk --release \
+          --build-name=1.0.${{ github.run_number }} \
+          --build-number=${{ github.run_number }} \
+          --dart-define=APP_VERSION=1.0.${{ github.run_number }}
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DATAPLUS_v1.0.${{ github.run_number }}
+        path: build/app/outputs/flutter-apk/app-release.apk
