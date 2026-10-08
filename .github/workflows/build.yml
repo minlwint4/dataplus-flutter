@@ -63,10 +63,10 @@ jobs:
 
     - name: Configure Android Project & Fix Kotlin Version
       run: |
-        if [ ! -d "android" ]; then
-          echo "Generating Android Project structure..."
-          flutter create . --org com.example --project-name dataplus_app
-        fi
+        # 🌟 အဟောင်းကို ဖျက်ပြီး အသစ်ပြန်ဆောက်မည့် နေရာ (Error Fix)
+        echo "Generating fresh Android Project structure..."
+        rm -rf android
+        flutter create . --org com.example --project-name dataplus_app
 
         python3 -c "
         import os, re
