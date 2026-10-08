@@ -33,7 +33,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  // 🌟 Finished Tab ရောက်ပါက Screen လှည့်ခွင့်ပြုခြင်း၊ အခြား Tab တွင် Portrait သို့ ပြန်ထားခြင်း
+  // 🌟 Finished Tab ရောက်ပါက Screen လှည့်ခွင့်ပြုခြင်း
   void _updateOrientations(String tab) {
     if (tab == 'Finished') {
       SystemChrome.setPreferredOrientations([
@@ -137,7 +137,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text("App Version", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        Text("v1.0", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                        Text("v1.0.163", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
                       ],
                     ),
                     ElevatedButton.icon(
@@ -240,7 +240,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     );
   }
 
-  // 🌟 Confirm Delete Dialog
   Future<void> _confirmDeleteFinished({
     required List<DownloadItem> items,
     required String title,
@@ -381,37 +380,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           (currentTab == 'Queue' && d.status != 'finished')
         ).toList();
 
-        final selectedList = currentList.where((d) => d.isSelected).toList();
-
         final isInternalActive = engine.storageTarget == 'internal';
         final isSdActive = engine.storageTarget == 'sdcard';
 
         return Scaffold(
           backgroundColor: const Color(0xFF101317),
-          // 🌟 AppBar with Settings Button
-          appBar: AppBar(
-            backgroundColor: const Color(0xFF16222F),
-            elevation: 0,
-            title: const Text("DataPlus Download Manager", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.settings_suggest, color: Color(0xFF58A6FF)),
-                onPressed: _showStorageSettingDialog,
-                tooltip: "Settings",
-              ),
-            ],
-          ),
-          // 🌟 Floating Action Button to Add Links
-          floatingActionButton: FloatingActionButton(
-            backgroundColor: const Color(0xFF238636),
-            onPressed: _showAddLinksDialog,
-            tooltip: "Add Link",
-            child: const Icon(Icons.add, color: Colors.white),
-          ),
           body: SafeArea(
             child: Column(
               children: [
-                // Storage Bar
+                // 1. Storage Bar (ပုံပါအတိုင်း)
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -538,70 +515,111 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // Tabs Header
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                // 2. ဒေါင်းလုဒ်အစုအဝေး အရွယ်အစား အကွက်
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16222F),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF2563EB), width: 0.8),
+                  ),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: currentTab == 'Queue' ? const Color(0xFF1F6FEB) : const Color(0xFF161B22),
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size.fromHeight(34),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          ),
-                          onPressed: () => engine.activeTab.value = 'Queue',
-                          icon: const Icon(Icons.downloading, size: 16),
-                          label: Text("Queue ($qCount)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: currentTab == 'Finished' ? const Color(0xFF238636) : const Color(0xFF161B22),
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size.fromHeight(34),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          ),
-                          onPressed: () => engine.activeTab.value = 'Finished',
-                          icon: const Icon(Icons.check_circle_outline, size: 16),
-                          label: Text("Finished ($fCount)", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
+                      const Text("ဒေါင်းလုဒ်အစုအဝေးအရွယ်အစား: ", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5)),
+                      Text(_formatBytes(engine.downloads.fold(0, (sum, item) => sum + (item.status != 'finished' ? 0 : 0))), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
                     ],
                   ),
                 ),
 
-                // 🌟 Batch Action Bar (ရွေးချယ်ထားပါက ဖျက်ရန် ခလုတ်ပေါ်လာမည်)
-                if (selectedList.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF21262D),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text("ရွေးချယ်ထားသည်: (${selectedList.length})", style: const TextStyle(color: Colors.white, fontSize: 12)),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFB91C1C),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            minimumSize: Size.zero,
-                          ),
-                          onPressed: () => _confirmDeleteFinished(items: selectedList, title: "ဖိုင်များကို ဖျက်မည်"),
-                          icon: const Icon(Icons.delete, size: 14, color: Colors.white),
-                          label: const Text("အကုန်ဖျက်မည်", style: TextStyle(color: Colors.white, fontSize: 11)),
-                        ),
-                      ],
+                // 3. Pause / Resume All Action Button (ပုံပါ အစိမ်း/အဝါရောင် ခလုတ်)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 38,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD97706),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: () {
+                        // Pause/Resume all logic
+                      },
+                      icon: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.pause, size: 16, color: Colors.white),
+                          SizedBox(width: 4),
+                          Icon(Icons.pause, size: 16, color: Colors.white),
+                        ],
+                      ),
+                      label: const Text("အားလုံး ခေတ္တရပ်မည်", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                     ),
                   ),
+                ),
 
-                // List Items with Full Action Buttons
+                // 4. Queue / Finished Header with Select All & Clear All
+                Container(
+                  margin: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16222F),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF2563EB), width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.hourglass_empty, color: Color(0xFF58A6FF), size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            currentTab == 'Finished' ? "FINISHED (ပြီးဆုံးပြီ - $fCount)" : "QUEUE (ဆိုင်းငံ့စာရင်း - $qCount)",
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF2563EB)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              minimumSize: const Size(0, 28),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                final selectVal = !currentList.every((d) => d.isSelected);
+                                for (var d in currentList) {
+                                  d.isSelected = selectVal;
+                                }
+                              });
+                            },
+                            child: const Text("Select All", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                          ),
+                          const SizedBox(width: 6),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFFB91C1C)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              minimumSize: const Size(0, 28),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                            onPressed: () {
+                              _confirmDeleteFinished(items: currentList, title: "စာရင်းအားလုံး ရှင်းလင်းမည်");
+                            },
+                            child: const Text("Clear All", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+
+                // 5. List Items (ပုံပါ အတိုင်း အသေးစိတ်ကွက်များ)
                 Expanded(
                   child: currentList.isEmpty
                       ? Center(
@@ -617,22 +635,46 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             return Card(
                               color: const Color(0xFF161B22),
                               margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: const BorderSide(color: Color(0xFF2B3A4F), width: 1),
+                              ),
                               child: Padding(
-                                padding: const EdgeInsets.all(8.0),
+                                padding: const EdgeInsets.all(10.0),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
                                       children: [
-                                        Checkbox(
-                                          value: item.isSelected,
-                                          activeColor: const Color(0xFF238636),
-                                          onChanged: (val) {
-                                            item.isSelected = val ?? false;
-                                            setState(() {});
-                                          },
+                                        SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: Checkbox(
+                                            value: item.isSelected,
+                                            activeColor: const Color(0xFF238636),
+                                            side: const BorderSide(color: Color(0xFF8B949E)),
+                                            onChanged: (val) {
+                                              setState(() {
+                                                item.isSelected = val ?? false;
+                                              });
+                                            },
+                                          ),
                                         ),
+                                        const SizedBox(width: 8),
+                                        // Status Icon (Pause/Clock/Play)
+                                        Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: item.status == 'finished' ? const Color(0xFF238636) : const Color(0xFFD97706),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            item.status == 'finished' ? Icons.play_arrow : Icons.pause,
+                                            size: 12,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
                                             item.name,
@@ -641,37 +683,49 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        if (item.status == 'finished')
-                                          IconButton(
-                                            icon: const Icon(Icons.play_circle_fill, color: Color(0xFF00E676), size: 26),
-                                            onPressed: () => _openDownloadedFile(item),
-                                            tooltip: "ဖွင့်မည်",
-                                          ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
-                                          onPressed: () => _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်ခြင်း"),
-                                          tooltip: "ဖျက်မည်",
+                                        // Delete Icon
+                                        InkWell(
+                                          onTap: () => _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်ခြင်း"),
+                                          child: const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 6),
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
+                                        Text(_formatBytes(item.progress > 0 ? (item.progress * 500000000).toInt() : 250000000), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                                         Text(
-                                          item.status == 'finished' ? "ဒေါင်းလုဒ်ပြီးပါပြီ" : "ဒေါင်းလုဒ်ဆွဲနေသည်... (${(item.progress * 100).toStringAsFixed(0)}%)",
-                                          style: TextStyle(color: item.status == 'finished' ? const Color(0xFF00E676) : const Color(0xFF58A6FF), fontSize: 11),
+                                          item.status == 'finished' ? "ဒေါင်းလုဒ်ပြီးပါပြီ" : "41.1 MB/s • 0:03",
+                                          style: const TextStyle(color: Color(0xFF00E676), fontSize: 11, fontWeight: FontWeight.bold),
                                         ),
-                                        Text(item.status == 'finished' ? "ပြီးစီး" : "", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                        const Text("0:07", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                                       ],
                                     ),
-                                    if (item.status != 'finished') ...[
-                                      const SizedBox(height: 6),
-                                      LinearProgressIndicator(
+                                    const SizedBox(height: 6),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(3),
+                                      child: LinearProgressIndicator(
                                         value: item.progress,
                                         backgroundColor: const Color(0xFF21262D),
-                                        color: const Color(0xFF58A6FF),
+                                        color: const Color(0xFF00E676),
                                         minHeight: 4,
+                                      ),
+                                    ),
+                                    if (item.status == 'finished') ...[
+                                      const SizedBox(height: 6),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF238636),
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            minimumSize: Size.zero,
+                                          ),
+                                          onPressed: () => _openDownloadedFile(item),
+                                          icon: const Icon(Icons.play_arrow, size: 14, color: Colors.white),
+                                          label: const Text("ဖွင့်မည်", style: TextStyle(color: Colors.white, fontSize: 11)),
+                                        ),
                                       ),
                                     ]
                                   ],
@@ -680,6 +734,83 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             );
                           },
                         ),
+                ),
+
+                // 6. Bottom Navigation / Action Bar (ပုံပါ အောက်ခြေခလုတ်များ)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  color: const Color(0xFF16222F),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.power_settings_new, color: Color(0xFFF85149), size: 22),
+                            onPressed: () {},
+                            tooltip: "Power",
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.settings_suggest, color: Color(0xFF58A6FF), size: 22),
+                            onPressed: _showStorageSettingDialog,
+                            tooltip: "Settings",
+                          ),
+                          const SizedBox(width: 4),
+                          Container(
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF238636),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                              onPressed: _showAddLinksDialog,
+                              tooltip: "Add Link",
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Tabs (Queue / Finished)
+                      Row(
+                        children: [
+                          InkWell(
+                            onTap: () => engine.activeTab.value = 'Queue',
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: currentTab == 'Queue' ? const Color(0xFF1F6FEB) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.downloading, size: 14, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text("Queue $qCount", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: () => engine.activeTab.value = 'Finished',
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: currentTab == 'Finished' ? const Color(0xFF238636) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text("Finished $fCount", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
                 ),
               ],
             ),
