@@ -16,6 +16,11 @@ dependencies:
   video_player: ^2.9.2
   chewie: ^1.8.5
 
+# 🌟 ဤအပိုင်းက Package ငြိနေသမျှ Error အားလုံးကို အပြီးတိုင် ကျော်ဖြတ်ပေးပါမည်
+dependency_overrides:
+  package_info_plus: ^10.2.2
+  path: 1.9.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
