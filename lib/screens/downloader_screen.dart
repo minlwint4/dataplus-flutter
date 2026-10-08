@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import '../services/download_engine.dart';
 import '../main.dart'; // 🚀 Version & Update Checker ခေါ်ယူရန်
+import 'video_player_screen.dart'; // 🎬 In-App Video Player အတွက်
 
 class DownloaderScreen extends StatefulWidget {
   const DownloaderScreen({super.key});
@@ -237,7 +238,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
     if (!await file.exists()) {
       final altFolder = (folder == DownloadEngine.internalDownloadPath)
-          ? '${engine.sdDownloadPath}/DataPlus'
+          ? '${engine.sdDownloadPath}/.Dataplus'
           : DownloadEngine.internalDownloadPath;
       final altFile = File('$altFolder/${item.name}');
       if (await altFile.exists()) {
@@ -250,16 +251,28 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       }
     }
 
-    String mimeType = '*/*';
     final lower = item.name.toLowerCase();
+
+    // 🎬 ဗီဒီယိုဖိုင်ဖြစ်ပါက In-App Player ဖြင့် ဖွင့်မည်
+    if (lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.avi')) {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoPlayerScreen(
+              videoFile: file,
+              videoTitle: item.name,
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // 📦 APK သို့မဟုတ် အခြားဖိုင်များဖြစ်ပါက Install လုပ်ရန် မူလအတိုင်း Intent ဖြင့်ဖွင့်မည်
+    String mimeType = '*/*';
     if (lower.endsWith('.apk')) {
       mimeType = 'application/vnd.android.package-archive';
-    } else if (lower.endsWith('.mp4')) {
-      mimeType = 'video/mp4';
-    } else if (lower.endsWith('.mkv')) {
-      mimeType = 'video/x-matroska';
-    } else if (lower.endsWith('.avi')) {
-      mimeType = 'video/x-msvideo';
     }
 
     try {
@@ -461,7 +474,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                         Row(
                                           children: [
                                             Icon(Icons.sd_card, color: engine.isSdAvailable ? const Color(0xFF38BDF8) : const Color(0xFF6E7681), size: 13),
-                                            SizedBox(width: 3),
+                                            const SizedBox(width: 3),
                                             const Text("SD ကတ်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
                                           ],
                                         ),
