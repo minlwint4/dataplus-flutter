@@ -41,13 +41,14 @@ class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
   static Future<void> checkLocalServerUpdate(BuildContext context, {bool isManual = false}) async {
+    // 🌟 192.168.1.50 နှင့် 10.10.10.10 ကို အစဉ်လိုက် လှည့်ပတ်စစ်ဆေးမည်
     final possibleIps = ['192.168.1.50', '10.10.10.10', 'localhost'];
-    HttpClient? client;
     
     for (var ip in possibleIps) {
+      HttpClient? client;
       try {
         client = HttpClient();
-        client.connectionTimeout = const Duration(seconds: 2);
+        client.connectionTimeout = const Duration(seconds: 1);
         
         final req = await client.getUrl(Uri.parse('http://$ip:1000/api/app_version'));
         final resp = await req.close();
@@ -95,7 +96,7 @@ class MainNavigationScreen extends StatefulWidget {
 
     if (isManual && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Server သို့ ချိတ်ဆက်၍မရပါ (IP လိပ်စာများကို စစ်ဆေးပါ)')),
+        const SnackBar(content: Text('⚠️ Server သို့ ချိတ်ဆက်၍မရပါ (192.168.1.50 နှင့် 10.10.10.10 ကို စစ်ဆေးပါ)')),
       );
     }
   }
@@ -188,7 +189,6 @@ class MainNavigationScreen extends StatefulWidget {
       final savePath = '${saveDir.path}/dataplus_update.apk';
       final file = File(savePath);
       
-      // 🌟 ဖိုင်ဟောင်းရှိနေပါက အရင်ရှင်းလင်းပြီးမှ ဆွဲမည် (Parse Error ကာကွယ်ရန်)
       if (await file.exists()) {
         try {
           await file.delete();
@@ -211,7 +211,6 @@ class MainNavigationScreen extends StatefulWidget {
 
       if (context.mounted) Navigator.pop(context);
 
-      // 🌟 ဖိုင် Storage ထဲသို့ အပြည့်အဝ ပြီးစီးကြောင်း သေချာစေရန် ခဏစောင့်မည်
       await Future.delayed(const Duration(milliseconds: 600));
 
       const channel = MethodChannel('com.dataplus/storage');
