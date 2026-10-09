@@ -274,7 +274,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       }
     }
 
-    const mimeType = 'video/*';
+    // 🌟 APK ဖိုင်ဖြစ်ပါက App Installer MimeType ကိုသုံးမည်၊ ကျန်တာ ဗီဒီယို
+    final bool isApk = item.name.toLowerCase().endsWith('.apk');
+    final mimeType = isApk ? 'application/vnd.android.package-archive' : 'video/*';
+
     try {
       const channel = MethodChannel('com.dataplus/storage');
       await channel.invokeMethod('openFile', {
@@ -549,7 +552,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // 3. List / Items (Finished တွင်လည်း Row ပုံစံဖြင့် Height မြင့်မားစွာ ပြသခြင်း)
+                // 3. List Items
                 Expanded(
                   child: currentList.isEmpty
                       ? Center(
@@ -563,6 +566,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           itemBuilder: (context, index) {
                             final item = currentList[index];
                             final isFinished = currentTab == 'Finished';
+                            final bool isApk = item.name.toLowerCase().endsWith('.apk');
 
                             return Card(
                               color: const Color(0xFF161B22),
@@ -606,7 +610,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                                 color: Color(0xFF0D1117),
                                                 shape: BoxShape.circle,
                                               ),
-                                              child: const Icon(Icons.play_arrow, size: 16, color: Color(0xFF00E676)),
+                                              child: Icon(
+                                                isApk ? Icons.android : Icons.play_arrow,
+                                                size: 16,
+                                                color: isApk ? const Color(0xFF58A6FF) : const Color(0xFF00E676),
+                                              ),
                                             )
                                           else
                                             InkWell(
@@ -683,7 +691,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                 ),
 
-                // 4. Bottom Action Bar (Settings နှင့် ကြီးမားကျယ်ဝန်းသော Queue / Finished Tabs)
+                // 4. Bottom Action Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   color: const Color(0xFF16222F),
