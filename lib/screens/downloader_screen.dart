@@ -82,11 +82,23 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E232B),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        title: const Row(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(Icons.add_link, color: Color(0xFF00E676), size: 22),
-            SizedBox(width: 8),
-            Text("Download Link ထည့်ရန်", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            const Row(
+              children: [
+                Icon(Icons.add_link, color: Color(0xFF00E676), size: 22),
+                SizedBox(width: 8),
+                Text("Download Link ထည့်ရန်", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            IconButton(
+              onPressed: () => Navigator.pop(ctx),
+              icon: const Icon(Icons.close, color: Color(0xFF8B949E), size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: "ပိတ်မည်",
+            ),
           ],
         ),
         content: Column(
@@ -130,9 +142,17 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           ],
         ),
         actions: [
+          // 🌟 စာသားများကို Clear လုပ်ပေးမည့် "ပယ်ဖျက်" ခလုတ်
+          TextButton(
+            onPressed: () {
+              textController.clear();
+            },
+            child: const Text("ပယ်ဖျက်", style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          // 🌟 Dialog ကို ပိတ်မည့် "ပိတ်မည်" ခလုတ်
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("ပယ်ဖျက်", style: TextStyle(color: Color(0xFF8B949E))),
+            child: const Text("ပိတ်မည်", style: TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
