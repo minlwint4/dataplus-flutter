@@ -234,4 +234,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: DATAPLUS_v1.0.${{ github.run_number }}
-        path: build/app/outputs/flutter-apk/dataplus.apk
+        path: build/app/outputs/flutter-apk/app-release.apk
