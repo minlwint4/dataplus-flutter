@@ -409,7 +409,7 @@ class DownloadEngine extends ChangeNotifier {
     final raf = await tempFile.open(mode: FileMode.write);
     try { raf.truncateSync(totalBytes); } catch (_) {}
 
-    const numThreads = 1;
+    const numThreads = 5;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
       final s = i * partSize;
