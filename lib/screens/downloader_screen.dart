@@ -64,6 +64,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
+  // 🌟 Settings ထဲတွင် Update စစ်မည့် ခလုတ်နှင့် ဗားရှင်းအချက်အလက် ပြန်လည်ထည့်သွင်းခြင်း
   void _showStorageSettingDialog() {
     showDialog(
       context: context,
@@ -127,6 +128,32 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         }
                       : null,
                 ),
+                const Divider(color: Color(0xFF30363D), height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("App Version", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        Text(kAppVersion, style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                      ],
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF238636),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        MainNavigationScreen.checkLocalServerUpdate(context, isManual: true);
+                      },
+                      icon: const Icon(Icons.refresh, size: 14, color: Colors.white),
+                      label: const Text("Update စစ်မည်", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    )
+                  ],
+                ),
               ],
             ),
             actions: [
@@ -137,76 +164,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             ],
           );
         },
-      ),
-    );
-  }
-
-  void _showAddLinksDialog() {
-    final textController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E232B),
-        title: const Row(
-          children: [
-            Icon(Icons.add_link, color: Color(0xFF238636), size: 22),
-            SizedBox(width: 8),
-            Text("Add Download Links", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: SizedBox(
-          width: 320,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("ဒေါင်းလုဒ် Link များ ထည့်သွင်းပါ:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final data = await Clipboard.getData('text/plain');
-                      if (data?.text != null) {
-                        textController.text = data!.text!;
-                      }
-                    },
-                    icon: const Icon(Icons.content_paste, size: 16, color: Color(0xFF58A6FF)),
-                    label: const Text("Paste", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 12)),
-                  )
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: textController,
-                maxLines: 5,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFF0D1117),
-                  hintText: "ဒီနေရာတွင် Link များကို ကူးထည့်ပါ...",
-                  hintStyle: const TextStyle(color: Color(0xFF484F58), fontSize: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF30363D))),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF238636))),
-                ),
-              )
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E)))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF238636)),
-            onPressed: () {
-              final text = textController.text.trim();
-              final urls = text.split('\n').map((e) => e.trim()).where((e) => e.startsWith('http')).toList();
-              Navigator.pop(ctx);
-              if (urls.isNotEmpty) {
-                engine.addUrls(urls);
-              }
-            },
-            child: const Text("Queue ထဲ ထည့်မည်", style: TextStyle(color: Colors.white)),
-          )
-        ],
       ),
     );
   }
@@ -352,6 +309,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
         final isInternalActive = engine.storageTarget == 'internal';
         final isSdActive = engine.storageTarget == 'sdcard';
+
+        // 🌟 Queue ထဲတွင် တစ်ခုခု ဒေါင်းလုဒ်လုပ်နေခြင်း ရှိမရှိ စစ်ဆေးခြင်း (Start/Pause ခလုတ်အတွက်)
+        final bool isAnyDownloading = engine.downloads.any((d) => d.status == 'downloading' || engine.isDownloading);
 
         return Scaffold(
           backgroundColor: const Color(0xFF101317),
@@ -507,18 +467,28 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       height: 38,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF238636),
+                          backgroundColor: isAnyDownloading ? const Color(0xFFD97706) : const Color(0xFF238636),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                         ),
-                        onPressed: () => engine.startAllQueued(),
-                        icon: const Icon(Icons.play_arrow, size: 18, color: Colors.white),
-                        label: const Text("စတင်ဒေါင်းမည် (Start All)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        // 🌟 နှိပ်လိုက်တာနဲ့ Start ဖြစ်စေ သို့မဟုတ် Pause လုပ်စေရန် ပြောင်းလဲထားသည်
+                        onPressed: () {
+                          if (isAnyDownloading) {
+                            engine.pauseAll();
+                          } else {
+                            engine.startAllQueued();
+                          }
+                        },
+                        icon: Icon(isAnyDownloading ? Icons.pause : Icons.play_arrow, size: 18, color: Colors.white),
+                        label: Text(
+                          isAnyDownloading ? "ခေတ္တရပ်မည် (Pause All)" : "စတင်ဒေါင်းမည် (Start All)",
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                   ),
                 ],
 
-                // 2. Queue / Finished Header with Select All & Clear All (စာသားမပါဘဲ ကြီးမားသော အမှိုက်ပုံး Bin Icon သက်သက်)
+                // 2. Queue / Finished Header with Select All & Bin Icon Clear All
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -560,7 +530,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             child: const Text("Select All", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
                           ),
                           const SizedBox(width: 8),
-                          // 🌟 Clear All စာသားလုံးဝဖြုတ်ပြီး ကြီးမားသောအမှိုက်ပုံးပုံ (Bin Icon) သက်သက်
+                          // 🌟 Clear All စာသားလုံးဝမပါတော့ဘဲ အမှိုက်ပုံး Bin Icon သက်သက်
                           IconButton(
                             onPressed: () {
                               final selectedItems = currentList.where((d) => d.isSelected).toList();
@@ -594,7 +564,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                         )
                       : currentTab == 'Finished'
-                          // 🌟 Finished အတွက် Thumbnail Grid View (အစိမ်းရောင် Play Icon ပါဝင်သော Thumbnail Card)
+                          // 🌟 Finished အတွက် Thumbnail Grid View (MX Player ပုံစံ ဇာတ်ကားကတ်ပြားများ)
                           ? GridView.builder(
                               padding: const EdgeInsets.all(8),
                               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -682,7 +652,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 );
                               },
                             )
-                          // Queue အတွက် ListView ပုံစံ (File Size, Data Speed, ETA အပြည့်အစုံပါဝင်သည်)
+                          // Queue အတွက် ListView ပုံစံ
                           : ListView.builder(
                               itemCount: currentList.length,
                               itemBuilder: (context, index) {
@@ -773,78 +743,69 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             ),
                 ),
 
-                // 4. Bottom Action Bar
+                // 4. Bottom Action Bar (Power နဲ့ (+) Plus ခလုတ်များ ဖြုတ်ပြီး Queue / Finished များကို ကြီးမားစွာ ချဲ့ထားသည်)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   color: const Color(0xFF16222F),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.power_settings_new, color: Color(0xFFF85149), size: 22),
-                            onPressed: () {},
-                            tooltip: "Power",
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.settings_suggest, color: Color(0xFF58A6FF), size: 22),
-                            onPressed: _showStorageSettingDialog,
-                            tooltip: "Settings",
-                          ),
-                          const SizedBox(width: 4),
-                          Container(
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF238636),
-                              shape: BoxShape.circle,
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.add, color: Colors.white, size: 20),
-                              onPressed: _showAddLinksDialog,
-                              tooltip: "Add Link",
-                            ),
-                          ),
-                        ],
+                      // 🌟 Settings ခလုတ်တစ်ခုတည်းကိုသာ ဘယ်ဘက်တွင် ထားရှိမည်
+                      IconButton(
+                        icon: const Icon(Icons.settings_suggest, color: Color(0xFF58A6FF), size: 24),
+                        onPressed: _showStorageSettingDialog,
+                        tooltip: "Settings",
                       ),
-                      Row(
-                        children: [
-                          InkWell(
-                            onTap: () => engine.activeTab.value = 'Queue',
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: currentTab == 'Queue' ? const Color(0xFF1F6FEB) : Colors.transparent,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.downloading, size: 14, color: Colors.white),
-                                  const SizedBox(width: 4),
-                                  Text("Queue $qCount", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          InkWell(
-                            onTap: () => engine.activeTab.value = 'Finished',
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: currentTab == 'Finished' ? const Color(0xFF238636) : Colors.transparent,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
-                                  const SizedBox(width: 4),
-                                  Text("Finished $fCount", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                                ],
+                      const SizedBox(width: 8),
+                      // 🌟 Queue နဲ့ Finished Tab နှစ်ခုကို မျက်နှာပြင်အပြည့်နီးပါး ချဲ့ထွင်ထားခြင်း
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => engine.activeTab.value = 'Queue',
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: currentTab == 'Queue' ? const Color(0xFF1F6FEB) : const Color(0xFF0F1824),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(color: currentTab == 'Queue' ? const Color(0xFF58A6FF) : const Color(0xFF2B3A4F)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.downloading, size: 16, color: Colors.white),
+                                      const SizedBox(width: 6),
+                                      Text("Queue ($qCount)", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      )
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => engine.activeTab.value = 'Finished',
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: currentTab == 'Finished' ? const Color(0xFF238636) : const Color(0xFF0F1824),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(color: currentTab == 'Finished' ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.check_circle_outline, size: 16, color: Colors.white),
+                                      const SizedBox(width: 6),
+                                      Text("Finished ($fCount)", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
