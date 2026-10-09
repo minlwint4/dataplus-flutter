@@ -358,7 +358,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 1. Queue Tab တွင်သာ Storage Bar နှင့် စုစုပေါင်းဆိုက်ပြသမည် (Finish တွင် မပါပါ)
+                // 1. Queue Tab တွင်သာ Storage Bar နှင့် စုစုပေါင်းဆိုက်ပြသမည်
                 if (currentTab == 'Queue') ...[
                   Container(
                     margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
@@ -518,10 +518,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ],
 
-                // 2. Queue / Finished Header with Select All & Clear All (ကြီးမားသော Bin ပုံစံ Clear All ခလုတ်)
+                // 2. Queue / Finished Header with Select All & Clear All (စာသားမပါဘဲ ကြီးမားသော အမှိုက်ပုံး Bin Icon သက်သက်)
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFF16222F),
                     borderRadius: BorderRadius.circular(6),
@@ -532,11 +532,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(currentTab == 'Finished' ? Icons.video_library : Icons.hourglass_empty, color: const Color(0xFF58A6FF), size: 18),
+                          Icon(currentTab == 'Finished' ? Icons.video_library : Icons.hourglass_empty, color: const Color(0xFF58A6FF), size: 16),
                           const SizedBox(width: 6),
                           Text(
                             currentTab == 'Finished' ? "FINISHED (ဗီဒီယိုများ - $fCount)" : "QUEUE (ဆိုင်းငံ့စာရင်း - $qCount)",
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -545,9 +545,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           OutlinedButton(
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: Color(0xFF2563EB)),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              minimumSize: const Size(0, 32),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              minimumSize: const Size(0, 28),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                             ),
                             onPressed: () {
                               setState(() {
@@ -557,16 +557,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 }
                               });
                             },
-                            child: const Text("Select All", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11.5)),
+                            child: const Text("Select All", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
                           ),
                           const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFB91C1C),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              minimumSize: const Size(0, 32),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            ),
+                          // 🌟 Clear All စာသားလုံးဝဖြုတ်ပြီး ကြီးမားသောအမှိုက်ပုံးပုံ (Bin Icon) သက်သက်
+                          IconButton(
                             onPressed: () {
                               final selectedItems = currentList.where((d) => d.isSelected).toList();
                               final itemsToDelete = selectedItems.isNotEmpty ? selectedItems : currentList;
@@ -578,8 +573,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 );
                               }
                             },
-                            icon: const Icon(Icons.delete_sweep, size: 18, color: Colors.white),
-                            label: const Text("Clear All", style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.delete_sweep_rounded, color: Color(0xFFF85149), size: 26),
+                            tooltip: "Clear All",
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                           ),
                         ],
                       )
@@ -597,14 +594,14 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                         )
                       : currentTab == 'Finished'
-                          // Finished အတွက် Thumbnail Grid View (ဇာတ်ကားနာမည် အပြည့်အစုံပါဝင်သည်)
+                          // 🌟 Finished အတွက် Thumbnail Grid View (အစိမ်းရောင် Play Icon ပါဝင်သော Thumbnail Card)
                           ? GridView.builder(
                               padding: const EdgeInsets.all(8),
                               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
                                 crossAxisSpacing: 8,
                                 mainAxisSpacing: 8,
-                                childAspectRatio: 1.1,
+                                childAspectRatio: 1.05,
                               ),
                               itemCount: currentList.length,
                               itemBuilder: (context, index) {
@@ -633,7 +630,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                                   borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
                                                 ),
                                                 child: const Center(
-                                                  child: Icon(Icons.play_circle_filled, color: Color(0xFF00E676), size: 42),
+                                                  child: Icon(Icons.play_circle_filled, color: Color(0xFF00E676), size: 48),
                                                 ),
                                               ),
                                               Positioned(
@@ -658,13 +655,13 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                           ),
                                         ),
                                         Padding(
-                                          padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
+                                          padding: const EdgeInsets.fromLTRB(6, 6, 4, 6),
                                           child: Row(
                                             children: [
                                               Expanded(
                                                 child: Text(
                                                   item.name,
-                                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
                                                   maxLines: 2,
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
