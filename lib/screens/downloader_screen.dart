@@ -294,7 +294,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         setState(() {});
       }
     } else {
-      // Queue အတွက် list သက်သက် ဖျက်မည်
       engine.deleteFinishedItems(items, deleteActualFile: false);
       setState(() {});
     }
@@ -355,7 +354,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 1. Queue Tab တွင်သာ Storage Bar ပြသမည် (Finish တွင် မလိုပါ)
+                // 1. Queue Tab တွင်သာ Storage Bar ပြသမည်
                 if (currentTab == 'Queue') ...[
                   Container(
                     margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
@@ -484,7 +483,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ],
 
-                // 2. Queue / Finished Header with Select All & Clear All (Trash/Bin icon)
+                // 2. Queue / Finished Header with Select All & Clear All
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -651,7 +650,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 );
                               },
                             )
-                          // Queue အတွက် ListView ပုံစံ (Start/Pause ခလုတ်ပါဝင်သည်)
+                          // Queue အတွက် ListView ပုံစံ
                           : ListView.builder(
                               itemCount: currentList.length,
                               itemBuilder: (context, index) {
@@ -682,30 +681,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                                     item.isSelected = val ?? false;
                                                   });
                                                 },
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            InkWell(
-                                              onTap: () {
-                                                setState(() {
-                                                  if (item.status == 'downloading') {
-                                                    engine.pauseItem(item);
-                                                  } else {
-                                                    engine.resumeItem(item);
-                                                  }
-                                                });
-                                              },
-                                              child: Container(
-                                                padding: const EdgeInsets.all(4),
-                                                decoration: BoxDecoration(
-                                                  color: item.status == 'downloading' ? const Color(0xFFD97706) : const Color(0xFF238636),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Icon(
-                                                  item.status == 'downloading' ? Icons.pause : Icons.play_arrow,
-                                                  size: 14,
-                                                  color: Colors.white,
-                                                ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
