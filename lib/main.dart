@@ -1,3 +1,8 @@
+ပေးပို့ထားသော **`lib/main.dart`** ကုဒ်ဖိုင်ထဲတွင် "နောက်မှ" ခလုတ်ကို ဖြုတ်ပေးပြီး ဖုန်း၏ Back ခလုတ် သို့မဟုတ် Dialog အပြင်ဘက်ကို နှိပ်၍ ကျော်လွန်၍မရအောင် (`PopScope(canPop: false)`) Force Update ပုံစံအဖြစ် အပြည့်အစုံ ပြင်ဆင်ရေးသားပေးလိုက်ပါတယ်ခင်ဗျာ။
+
+အောက်ပါကုဒ်အပြည့်အစုံကို `lib/main.dart` ဖိုင်အဟောင်းနေရာတွင် အစားထိုး ကူးထည့်လိုက်ပါ -
+
+```dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -101,44 +106,49 @@ class MainNavigationScreen extends StatefulWidget {
     }
   }
 
+  // 🌟 Force Update Dialog (နောက်မှ ခလုတ်ဖြုတ်ထားပြီး Back ခလုတ်ဖြင့် ပိတ်မရအောင် တားဆီးထားသည်)
   static void _showUpdateDialog(BuildContext context, String newVersion, String apkUrl, String changelog) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E232B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Row(
-          children: [
-            const Icon(Icons.system_update_rounded, color: Color(0xFF00E676), size: 24),
-            const SizedBox(width: 8),
-            Text("Update အသစ်ရှိပါသည် ($newVersion)", style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("လက်ရှိဗားရှင်း: $kAppVersion", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-            const SizedBox(height: 6),
-            Text("အသစ်ပါဝင်ချက်များ:\n$changelog", style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("နောက်မှ", style: TextStyle(color: Color(0xFF8B949E))),
+      builder: (ctx) => PopScope(
+        canPop: false, // ဖုန်း၏ Back ခလုတ်နှိပ်၍ ပိတ်မရအောင် တားမြစ်ခြင်း
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF1E232B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              const Icon(Icons.system_update_rounded, color: Color(0xFF00E676), size: 24),
+              const SizedBox(width: 8),
+              Text("ဗားရှင်းအသစ် လိုအပ်ပါသည် ($newVersion)", style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            ],
           ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF238636)),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _downloadAndInstallApk(context, apkUrl);
-            },
-            icon: const Icon(Icons.download, size: 16, color: Colors.white),
-            label: const Text("အခုပဲ Update မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          )
-        ],
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("လက်ရှိဗားရှင်း: $kAppVersion", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+              const SizedBox(height: 6),
+              Text("အသစ်ပါဝင်ချက်များ:\n$changelog", style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13)),
+              const SizedBox(height: 10),
+              const Text("ဆက်လက်အသုံးပြုရန် ဗားရှင်းအသစ်သို့ မဖြစ်မနေ အပ်ဒိတ်လုပ်ရန် လိုအပ်ပါသည်။", style: TextStyle(color: Color(0xFFFF4444), fontSize: 11.5, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          actions: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF238636),
+                minimumSize: const Size(double.infinity, 38),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _downloadAndInstallApk(context, apkUrl);
+              },
+              icon: const Icon(Icons.download, size: 16, color: Colors.white),
+              label: const Text("အခုပဲ Update မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            )
+          ],
+        ),
       ),
     );
   }
@@ -149,21 +159,24 @@ class MainNavigationScreen extends StatefulWidget {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E232B),
-        title: const Text("Update APK ဒေါင်းလုဒ်ဆွဲနေသည်...", style: TextStyle(color: Colors.white, fontSize: 14)),
-        content: ValueListenableBuilder<double>(
-          valueListenable: progressNotifier,
-          builder: (context, val, _) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                LinearProgressIndicator(value: val > 0 ? val : null, color: const Color(0xFF00E676)),
-                const SizedBox(height: 10),
-                Text("${(val * 100).toStringAsFixed(0)}%", style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
-              ],
-            );
-          },
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF1E232B),
+          title: const Text("Update APK ဒေါင်းလုဒ်ဆွဲနေသည်...", style: TextStyle(color: Colors.white, fontSize: 14)),
+          content: ValueListenableBuilder<double>(
+            valueListenable: progressNotifier,
+            builder: (context, val, _) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: val > 0 ? val : null, color: const Color(0xFF00E676)),
+                  const SizedBox(height: 10),
+                  Text("${(val * 100).toStringAsFixed(0)}%", style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold)),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -301,3 +314,5 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 }
+
+```
