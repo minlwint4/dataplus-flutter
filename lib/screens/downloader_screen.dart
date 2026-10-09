@@ -201,6 +201,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
               final urls = text.split('\n').map((e) => e.trim()).where((e) => e.startsWith('http')).toList();
               Navigator.pop(ctx);
               if (urls.isNotEmpty) {
+                // Auto မစတင်ဘဲ Queue ထဲသို့သာ ထည့်သွင်းမည် (ကိုယ်တိုင် Storage ရွေးချယ်ပြီးမှ Start နှိပ်ရန်)
                 engine.addUrls(urls);
               }
             },
@@ -218,7 +219,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   }) async {
     bool deleteActualFile = false;
     
-    // Finished Tab တွင်သာ with file ပါမည်၊ Queue တွင် List သက်သက်သာ ဖျက်မည်
     if (isFinishedTab) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -295,7 +295,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         setState(() {});
       }
     } else {
-      // Queue အတွက် Dialogue မလိုဘဲ တိုက်ရိုက်ဖျက်မည်
       engine.deleteFinishedItems(items, deleteActualFile: false);
       setState(() {});
     }
@@ -523,7 +522,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ],
 
-                // 2. Queue / Finished Header with Select All & Clear All (Clear All ကို Bin ပုံစံပြောင်းထားသည်)
+                // 2. Queue / Finished Header with Select All & Clear All (Trash/Bin icon for Clear All)
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
