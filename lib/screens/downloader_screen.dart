@@ -294,7 +294,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         setState(() {});
       }
     } else {
-      // Queue အတွက် list သက်သက် ဖျက်မည်
       engine.deleteFinishedItems(items, deleteActualFile: false);
       setState(() {});
     }
@@ -355,7 +354,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 1. Queue Tab တွင်သာ Storage Bar နှင့် Start All ခလုတ်ပြသမည်
+                // 1. Queue Tab တွင်သာ Storage Bar ပြသမည်
                 if (currentTab == 'Queue') ...[
                   Container(
                     margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
@@ -480,44 +479,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16222F),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF2563EB), width: 0.8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Text("ဒေါင်းလုဒ်အစုအဝေးအရွယ်အစား: ", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5)),
-                        Text(_formatBytes(currentList.fold(0, (sum, item) => sum + 738300000)), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 38,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF238636),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        ),
-                        onPressed: () {
-                          // Queue ထဲရှိ ဆိုင်းငံ့ဖိုင်များကို ကိုယ်တိုင်စတင်ရန်
-                          try {
-                            for (var item in currentList) {
-                              engine.resumeItem(item);
-                            }
-                          } catch (_) {}
-                        },
-                        icon: const Icon(Icons.play_arrow, size: 18, color: Colors.white),
-                        label: const Text("စတင်ဒေါင်းမည် (Start All)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                      ),
                     ),
                   ),
                 ],
@@ -689,7 +650,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 );
                               },
                             )
-                          // Queue အတွက် ListView ပုံစံ (Start / Pause ခလုတ်များနှင့်တကွ)
+                          // Queue အတွက် ListView ပုံစံ
                           : ListView.builder(
                               itemCount: currentList.length,
                               itemBuilder: (context, index) {
@@ -720,30 +681,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                                     item.isSelected = val ?? false;
                                                   });
                                                 },
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            InkWell(
-                                              onTap: () {
-                                                setState(() {
-                                                  if (item.status == 'downloading') {
-                                                    engine.pauseItem(item);
-                                                  } else {
-                                                    engine.resumeItem(item);
-                                                  }
-                                                });
-                                              },
-                                              child: Container(
-                                                padding: const EdgeInsets.all(4),
-                                                decoration: BoxDecoration(
-                                                  color: item.status == 'downloading' ? const Color(0xFFD97706) : const Color(0xFF238636),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Icon(
-                                                  item.status == 'downloading' ? Icons.pause : Icons.play_arrow,
-                                                  size: 14,
-                                                  color: Colors.white,
-                                                ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
