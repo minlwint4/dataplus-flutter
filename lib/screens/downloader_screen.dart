@@ -21,6 +21,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     super.initState();
     currentTab = engine.activeTab.value;
     engine.activeTab.addListener(_handleTabChange);
+    _updateOrientations(currentTab);
   }
 
   void _handleTabChange() {
@@ -28,12 +29,32 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       setState(() {
         currentTab = engine.activeTab.value;
       });
+      _updateOrientations(currentTab);
+    }
+  }
+
+  // 🌟 Finished Tab ရောက်ပါက Screen လှည့်ခွင့်ပြုခြင်း
+  void _updateOrientations(String tab) {
+    if (tab == 'Finished') {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
     }
   }
 
   @override
   void dispose() {
     engine.activeTab.removeListener(_handleTabChange);
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
     super.dispose();
   }
 
@@ -44,6 +65,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
+  // 🌟 Settings & Update Dialog
   void _showStorageSettingDialog() {
     showDialog(
       context: context,
@@ -108,15 +130,14 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       : null,
                 ),
                 const Divider(color: Color(0xFF30363D), height: 18),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
+                    const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("App Version", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        Text("v$kAppVersion", style: const TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                        Text("App Version", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        Text("v1.0.163", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
                       ],
                     ),
                     ElevatedButton.icon(
@@ -144,6 +165,77 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  // 🌟 Add Download Links Dialog
+  void _showAddLinksDialog() {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E232B),
+        title: const Row(
+          children: [
+            Icon(Icons.add_link, color: Color(0xFF238636), size: 22),
+            SizedBox(width: 8),
+            Text("Add Download Links", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("ဒေါင်းလုဒ် Link များ ထည့်သွင်းပါ:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final data = await Clipboard.getData('text/plain');
+                      if (data?.text != null) {
+                        textController.text = data!.text!;
+                      }
+                    },
+                    icon: const Icon(Icons.content_paste, size: 16, color: Color(0xFF58A6FF)),
+                    label: const Text("Paste", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 12)),
+                  )
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: textController,
+                maxLines: 5,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF0D1117),
+                  hintText: "ဒီနေရာတွင် Link များကို ကူးထည့်ပါ...",
+                  hintStyle: const TextStyle(color: Color(0xFF484F58), fontSize: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF30363D))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF238636))),
+                ),
+              )
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF238636)),
+            onPressed: () {
+              final text = textController.text.trim();
+              final urls = text.split('\n').map((e) => e.trim()).where((e) => e.startsWith('http')).toList();
+              Navigator.pop(ctx);
+              if (urls.isNotEmpty) {
+                engine.addUrls(urls);
+              }
+            },
+            child: const Text("Queue ထဲ ထည့်မည်", style: TextStyle(color: Colors.white)),
+          )
+        ],
       ),
     );
   }
@@ -242,18 +334,18 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         file = altFile;
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ ဖုန်းထဲတွင် ဖိုင်မတွေ့ရှိတော့ပါ။ ဖျက်လိုက်ပြီလား စစ်ဆေးပါ။')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ ဖုန်းထဲတွင် ဖိုင်မတွေ့ရှိတော့ပါ။')));
         }
         return;
       }
     }
 
     final lower = item.name.toLowerCase();
-    String mimeType = '*/*';
+    String mimeType = 'video/*'; // Default to video for player
     
     if (lower.endsWith('.apk')) {
       mimeType = 'application/vnd.android.package-archive';
-    } else if (lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.avi')) {
+    } else if (lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.avi') || lower.endsWith('.mov')) {
       mimeType = 'video/*';
     } else if (lower.endsWith('.jpg') || lower.endsWith('.png') || lower.endsWith('.jpeg')) {
       mimeType = 'image/*';
@@ -275,75 +367,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  void _showAddLinksDialog() {
-    final textController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E232B),
-        title: const Row(
-          children: [
-            Icon(Icons.add_link, color: Color(0xFF238636), size: 22),
-            SizedBox(width: 8),
-            Text("Add Download Links", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: SizedBox(
-          width: 320,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("ဒေါင်းလုဒ် Link များ ထည့်သွင်းပါ:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final data = await Clipboard.getData('text/plain');
-                      if (data?.text != null) {
-                        textController.text = data!.text!;
-                      }
-                    },
-                    icon: const Icon(Icons.content_paste, size: 16, color: Color(0xFF58A6FF)),
-                    label: const Text("Paste", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 12)),
-                  )
-                ],
-              ),
-              TextField(
-                controller: textController,
-                maxLines: 5,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFF0D1117),
-                  hintText: "ဒီနေရာတွင် Link များကို ကူးထည့်ပါ...",
-                  hintStyle: const TextStyle(color: Color(0xFF484F58), fontSize: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF30363D))),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF238636))),
-                ),
-              )
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E)))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF238636)),
-            onPressed: () {
-              final text = textController.text.trim();
-              final urls = text.split('\n').map((e) => e.trim()).where((e) => e.startsWith('http')).toList();
-              Navigator.pop(ctx);
-              if (urls.isNotEmpty) {
-                engine.addUrls(urls);
-              }
-            },
-            child: const Text("Queue ထဲ ထည့်မည်", style: TextStyle(color: Colors.white)),
-          )
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -357,18 +380,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           (currentTab == 'Queue' && d.status != 'finished')
         ).toList();
 
-        final selectedList = currentList.where((d) => d.isSelected).toList();
-
         final isInternalActive = engine.storageTarget == 'internal';
         final isSdActive = engine.storageTarget == 'sdcard';
-
-        final isQueueTab = currentTab == 'Queue';
 
         return Scaffold(
           backgroundColor: const Color(0xFF101317),
           body: SafeArea(
             child: Column(
               children: [
+                // 1. Storage Bar
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -380,527 +400,491 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       width: 1.0,
                     ),
                   ),
-                  child: Column(
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: () => engine.setStorageTarget('internal'),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: isInternalActive ? const Color(0xFF1E2F44) : const Color(0xFF0F1824),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: isInternalActive ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Row(
-                                          children: [
-                                            Icon(Icons.phone_android, color: Color(0xFF00E676), size: 13),
-                                            SizedBox(width: 3),
-                                            Text("ဖုန်း Storage", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
-                                          ],
-                                        ),
-                                        if (isInternalActive)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                            decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(3)),
-                                            child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 8.5, fontWeight: FontWeight.bold)),
-                                          )
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(_formatBytes(engine.freeStorageBytes), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
-                                        Text("/ ${_formatBytes(engine.totalStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 9.5)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(2),
-                                      child: LinearProgressIndicator(
-                                        value: engine.totalStorageBytes > 0 ? (1.0 - (engine.freeStorageBytes / engine.totalStorageBytes)) : 0.0,
-                                        backgroundColor: const Color(0xFF263342),
-                                        color: const Color(0xFF00E676),
-                                        minHeight: 3.5,
-                                      ),
-                                    )
-                                  ],
-                                ),
-                              ),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => engine.setStorageTarget('internal'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isInternalActive ? const Color(0xFF1E2F44) : const Color(0xFF0F1824),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: isInternalActive ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-
-                          Expanded(
-                            child: InkWell(
-                              onTap: engine.isSdAvailable ? () => engine.setStorageTarget('sdcard') : null,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: isSdActive ? const Color(0xFF1E2F44) : const Color(0xFF0F1824),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: isSdActive ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    const Row(
                                       children: [
-                                        Row(
-                                          children: [
-                                            Icon(Icons.sd_card, color: engine.isSdAvailable ? const Color(0xFF38BDF8) : const Color(0xFF6E7681), size: 13),
-                                            const SizedBox(width: 3),
-                                            const Text("SD ကတ်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
-                                          ],
-                                        ),
-                                        if (isSdActive)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                            decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(3)),
-                                            child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 8.5, fontWeight: FontWeight.bold)),
-                                          )
+                                        Icon(Icons.phone_android, color: Color(0xFF00E676), size: 13),
+                                        SizedBox(width: 3),
+                                        Text("ဖုန်း Storage", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
                                       ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    if (engine.isSdAvailable) ...[
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(_formatBytes(engine.freeSdBytes), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
-                                          Text("/ ${_formatBytes(engine.totalSdBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 9.5)),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 3),
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(2),
-                                        child: LinearProgressIndicator(
-                                          value: engine.totalSdBytes > 0 ? (1.0 - (engine.freeSdBytes / engine.totalSdBytes)) : 0.0,
-                                          backgroundColor: const Color(0xFF263342),
-                                          color: const Color(0xFF38BDF8),
-                                          minHeight: 3.5,
-                                        ),
+                                    if (isInternalActive)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(3)),
+                                        child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 8.5, fontWeight: FontWeight.bold)),
                                       )
-                                    ] else ...[
-                                      const Text("မရှိပါ", style: TextStyle(color: Color(0xFF8B949E), fontWeight: FontWeight.bold, fontSize: 12)),
-                                      const SizedBox(height: 6),
-                                    ]
                                   ],
                                 ),
-                              ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(_formatBytes(engine.freeStorageBytes), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
+                                    Text("/ ${_formatBytes(engine.totalStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 9.5)),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(2),
+                                  child: LinearProgressIndicator(
+                                    value: engine.totalStorageBytes > 0 ? (1.0 - (engine.freeStorageBytes / engine.totalStorageBytes)) : 0.0,
+                                    backgroundColor: const Color(0xFF263342),
+                                    color: const Color(0xFF00E676),
+                                    minHeight: 3.5,
+                                  ),
+                                )
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(top: 5),
-                        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: engine.isStorageLow ? const Color(0xFF2A1215) : const Color(0xFF0E1726),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: engine.isStorageLow ? const Color(0xFFFF4D4D) : const Color(0xFF1E3A8A), width: 0.8),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "ဒေါင်းလုဒ်အရွယ်အစား: ${_formatBytes(engine.totalQueuedBytes)}",
-                              style: TextStyle(
-                                color: engine.isStorageLow ? const Color(0xFFFFA1A1) : const Color(0xFF38BDF8),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                              ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: InkWell(
+                          onTap: engine.isSdAvailable ? () => engine.setStorageTarget('sdcard') : null,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isSdActive ? const Color(0xFF1E2F44) : const Color(0xFF0F1824),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: isSdActive ? const Color(0xFF00E676) : const Color(0xFF2B3A4F)),
                             ),
-                            if (engine.isStorageLow)
-                              const Text("⚠️ နေရာမလုံလောက်ပါ!", style: TextStyle(color: Color(0xFFFF4D4D), fontWeight: FontWeight.bold, fontSize: 10)),
-                          ],
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.sd_card, color: Color(0xFF00E676), size: 13),
+                                        SizedBox(width: 3),
+                                        Text("SD ကတ်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5)),
+                                      ],
+                                    ),
+                                    if (isSdActive)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(3)),
+                                        child: const Text("သုံးနေ", style: TextStyle(color: Colors.black, fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                      )
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(engine.isSdAvailable ? _formatBytes(engine.freeSdBytes) : "မရှိပါ", style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
+                                    Text(engine.isSdAvailable ? "/ ${_formatBytes(engine.totalSdBytes)}" : "", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 9.5)),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(2),
+                                  child: LinearProgressIndicator(
+                                    value: (engine.isSdAvailable && engine.totalSdBytes > 0) ? (1.0 - (engine.freeSdBytes / engine.totalSdBytes)) : 0.0,
+                                    backgroundColor: const Color(0xFF263342),
+                                    color: const Color(0xFF00E676),
+                                    minHeight: 3.5,
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                if (isQueueTab && qCount > 0)
+                // 2. Queue Tab တွင်သာ ပြသရန် (Finished တွင် အသုံးမလိုတော့ပါ)
+                if (currentTab == 'Queue') ...[
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    child: engine.isDownloading
-                        ? ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFD97706),
-                              minimumSize: const Size(double.infinity, 42),
-                              padding: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            onPressed: () => engine.pauseAll(),
-                            icon: const Icon(Icons.pause, color: Colors.white, size: 20),
-                            label: const Text("⏸️ အားလုံး ခေတ္တရပ်မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                          )
-                        : ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: engine.isStorageLow ? const Color(0xFFB91C1C) : const Color(0xFF059669),
-                              minimumSize: const Size(double.infinity, 42),
-                              padding: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            onPressed: () => engine.startAllQueued(),
-                            icon: const Icon(Icons.play_arrow, color: Colors.white, size: 22),
-                            label: Text(
-                              "🚀 စတင်ဒေါင်းမည် ($qCount ဖိုင်)",
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                          ),
-                  ),
-
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isQueueTab ? const Color(0xFF0C1929) : const Color(0xFF0D2418),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isQueueTab ? const Color(0xFF1D4ED8) : const Color(0xFF059669),
-                      width: 0.8,
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16222F),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF2563EB), width: 0.8),
                     ),
+                    child: Row(
+                      children: [
+                        const Text("ဒေါင်းလုဒ်အစုအဝေးအရွယ်အစား: ", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5)),
+                        Text(_formatBytes(738300000), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 38,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD97706),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        onPressed: () {},
+                        icon: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.pause, size: 16, color: Colors.white),
+                            SizedBox(width: 4),
+                            Icon(Icons.pause, size: 16, color: Colors.white),
+                          ],
+                        ),
+                        label: const Text("အားလုံး ခေတ္တရပ်မည်", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                ],
+
+                // 3. Queue / Finished Header with Select All & Clear All
+                Container(
+                  margin: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16222F),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF2563EB), width: 0.8),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
-                          Icon(
-                            isQueueTab ? Icons.hourglass_top_rounded : Icons.check_circle_rounded,
-                            size: 16,
-                            color: isQueueTab ? const Color(0xFF38BDF8) : const Color(0xFF00E676),
-                          ),
-                          const SizedBox(width: 8),
+                          Icon(currentTab == 'Finished' ? Icons.video_library : Icons.hourglass_empty, color: const Color(0xFF58A6FF), size: 16),
+                          const SizedBox(width: 6),
                           Text(
-                            isQueueTab ? "QUEUE (ဆိုင်းငံ့စာရင်း - $qCount)" : "FINISHED (ပြီးစီးစာရင်း - $fCount)",
-                            style: TextStyle(
-                              color: isQueueTab ? const Color(0xFF38BDF8) : const Color(0xFF00E676),
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                            currentTab == 'Finished' ? "FINISHED (ဗီဒီယိုများ - $fCount)" : "QUEUE (ဆိုင်းငံ့စာရင်း - $qCount)",
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF2563EB)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              minimumSize: const Size(0, 28),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                final selectVal = !currentList.every((d) => d.isSelected);
+                                for (var d in currentList) {
+                                  d.isSelected = selectVal;
+                                }
+                              });
+                            },
+                            child: const Text("Select All", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                          ),
+                          const SizedBox(width: 6),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFFB91C1C)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              minimumSize: const Size(0, 28),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                            onPressed: () {
+                              _confirmDeleteFinished(items: currentList, title: "စာရင်းအားလုံး ရှင်းလင်းမည်");
+                            },
+                            child: const Text("Clear All", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+
+                // 4. List / Grid Items
+                Expanded(
+                  child: currentList.isEmpty
+                      ? Center(
+                          child: Text(
+                            currentTab == 'Finished' ? "ပြီးဆုံးသွားသော ဇာတ်ကားများ မရှိသေးပါ" : "ဒေါင်းလုဒ်ဆွဲရန် ဖိုင်များ မရှိသေးပါ",
+                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                          ),
+                        )
+                      : currentTab == 'Finished'
+                          // 🌟 Finished အတွက် Thumbnail Grid View (MX Player ပုံစံ)
+                          ? GridView.builder(
+                              padding: const EdgeInsets.all(8),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2, // တစ်တန်းလျှင် 2 ခု (Thumbnail View)
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                                childAspectRatio: 1.15,
+                              ),
+                              itemCount: currentList.length,
+                              itemBuilder: (context, index) {
+                                final item = currentList[index];
+                                return InkWell(
+                                  onTap: () => _openDownloadedFile(item),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF161B22),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: item.isSelected ? const Color(0xFF238636) : const Color(0xFF2B3A4F), width: item.isSelected ? 2 : 1),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Thumbnail Area with Player Play Icon & Checkbox
+                                        Expanded(
+                                          child: Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              Container(
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF0D1117),
+                                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                                                ),
+                                                child: const Center(
+                                                  child: Icon(Icons.play_circle_filled, color: Color(0xFF00E676), size: 42),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 4,
+                                                left: 4,
+                                                child: SizedBox(
+                                                  height: 22,
+                                                  width: 22,
+                                                  child: Checkbox(
+                                                    value: item.isSelected,
+                                                    activeColor: const Color(0xFF238636),
+                                                    side: const BorderSide(color: Colors.white54),
+                                                    onChanged: (val) {
+                                                      setState(() {
+                                                        item.isSelected = val ?? false;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                bottom: 4,
+                                                right: 4,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black.withOpacity(0.75),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: const Text("VIDEO", style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // File Name & Delete Option (2 lines for full name)
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  item.name,
+                                                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              InkWell(
+                                                onTap: () => _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်ခြင်း"),
+                                                child: const Padding(
+                                                  padding: EdgeInsets.all(4.0),
+                                                  child: Icon(Icons.more_vert, color: Color(0xFF8B949E), size: 18),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          // Queue အတွက် မူရင်း ListView ပုံစံ
+                          : ListView.builder(
+                              itemCount: currentList.length,
+                              itemBuilder: (context, index) {
+                                final item = currentList[index];
+                                return Card(
+                                  color: const Color(0xFF161B22),
+                                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: const BorderSide(color: Color(0xFF2B3A4F), width: 1),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(10.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: Checkbox(
+                                                value: item.isSelected,
+                                                activeColor: const Color(0xFF238636),
+                                                side: const BorderSide(color: Color(0xFF8B949E)),
+                                                onChanged: (val) {
+                                                  setState(() {
+                                                    item.isSelected = val ?? false;
+                                                  });
+                                                },
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.all(4),
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFFD97706),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(Icons.pause, size: 12, color: Colors.white),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                item.name,
+                                                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            InkWell(
+                                              onTap: () => _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်ခြင်း"),
+                                              child: const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        const Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text("244.7 MB", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                            Text("41.1 MB/s • 0:03", style: TextStyle(color: Color(0xFF00E676), fontSize: 11, fontWeight: FontWeight.bold)),
+                                            Text("0:07", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(3),
+                                          child: LinearProgressIndicator(
+                                            value: item.progress,
+                                            backgroundColor: const Color(0xFF21262D),
+                                            color: const Color(0xFF00E676),
+                                            minHeight: 4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                ),
+
+                // 5. Bottom Action Bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  color: const Color(0xFF16222F),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.power_settings_new, color: Color(0xFFF85149), size: 22),
+                            onPressed: () {},
+                            tooltip: "Power",
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.settings_suggest, color: Color(0xFF58A6FF), size: 22),
+                            onPressed: _showStorageSettingDialog,
+                            tooltip: "Settings",
+                          ),
+                          const SizedBox(width: 4),
+                          Container(
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF238636),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                              onPressed: _showAddLinksDialog,
+                              tooltip: "Add Link",
                             ),
                           ),
                         ],
                       ),
-                      if (currentList.isNotEmpty)
-                        Row(
-                          children: [
-                            // 🌟 Select All / None Button နေရာချဲ့ပေးခြင်း
-                            InkWell(
-                              onTap: () {
-                                final selectAll = selectedList.length != currentList.length;
-                                for (var item in currentList) {
-                                  item.isSelected = selectAll;
-                                }
-                                setState(() {});
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: isQueueTab ? const Color(0xFF1E3A8A) : const Color(0xFF065F46)),
-                                ),
-                                child: Text(
-                                  selectedList.length == currentList.length ? 'Deselect All' : 'Select All',
-                                  style: TextStyle(
-                                    color: isQueueTab ? const Color(0xFF93C5FD) : const Color(0xFF86EFAC),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                      Row(
+                        children: [
+                          InkWell(
+                            onTap: () => engine.activeTab.value = 'Queue',
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: currentTab == 'Queue' ? const Color(0xFF1F6FEB) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.downloading, size: 14, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text("Queue $qCount", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            // 🌟 Delete / Clear All Button နေရာချဲ့ပေးခြင်း
-                            if (selectedList.isNotEmpty)
-                              InkWell(
-                                onTap: () {
-                                  if (!isQueueTab) {
-                                    _confirmDeleteFinished(items: selectedList, title: "ရွေးထားသော ဖိုင်များ ဖျက်မည်");
-                                  } else {
-                                    engine.deleteSelected(selectedList);
-                                  }
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(color: const Color(0xFFDC2626), borderRadius: BorderRadius.circular(6)),
-                                  child: Text('Delete (${selectedList.length})', style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold)),
-                                ),
-                              )
-                            else
-                              InkWell(
-                                onTap: () {
-                                  if (!isQueueTab) {
-                                    _confirmDeleteFinished(items: currentList, title: "Finished ဖိုင်များ အားလုံး ဖျက်မည်");
-                                  } else {
-                                    engine.removeAll(currentTab);
-                                  }
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(color: const Color(0xFF3F191B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF7F1D1D))),
-                                  child: const Text('Clear All', style: TextStyle(color: Color(0xFFF85149), fontSize: 11.5, fontWeight: FontWeight.bold)),
-                                ),
+                          ),
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: () => engine.activeTab.value = 'Finished' ,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: currentTab == 'Finished' ? const Color(0xFF238636) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
                               ),
-                          ],
-                        )
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text("Finished $fCount", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
                     ],
                   ),
                 ),
-
-                Expanded(
-                  child: currentList.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                isQueueTab ? Icons.downloading_outlined : Icons.folder_open_outlined,
-                                size: 48,
-                                color: const Color(0xFF30363D),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                isQueueTab ? "Queue ထဲတွင် ဒေါင်းလုဒ်ဖိုင် မရှိပါ" : "ဒေါင်းပြီးစီးသောဖိုင် မရှိသေးပါ",
-                                style: const TextStyle(color: Color(0xFF6E7681), fontSize: 14),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          itemCount: currentList.length,
-                          itemBuilder: (context, index) {
-                            final item = currentList[index];
-                            final isDone = item.status == 'finished';
-                            final isDl = item.status == 'downloading';
-                            final isPaused = item.status == 'paused';
-                            final isApk = item.name.toLowerCase().endsWith('.apk');
-
-                            // 🌟 ဖိုင်တစ်ခုချင်းစီကြားမှာ Margin ထည့်ပေးပြီး နေရာကျယ်ကျယ် ပေးထားပါသည်
-                            return InkWell(
-                              onTap: isDone ? () => _openDownloadedFile(item) : null,
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 10),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF101317),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isDone ? const Color(0xFF00E676).withOpacity(0.4) : const Color(0xFF1E232B),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        SizedBox(
-                                          width: 30,
-                                          height: 30,
-                                          child: Checkbox(
-                                            value: item.isSelected,
-                                            activeColor: isDone ? const Color(0xFF00E676) : const Color(0xFF2563EB),
-                                            onChanged: (v) => setState(() => item.isSelected = v ?? false),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        if (isDone)
-                                          Icon(isApk ? Icons.android : Icons.check_circle, color: const Color(0xFF00E676), size: 22)
-                                        else if (isDl)
-                                          InkWell(
-                                            onTap: () => engine.togglePauseResume(item),
-                                            child: const Icon(Icons.pause_circle_filled, color: Color(0xFFE3B341), size: 26),
-                                          )
-                                        else if (isPaused)
-                                          InkWell(
-                                            onTap: () => engine.togglePauseResume(item),
-                                            child: const Icon(Icons.play_circle_fill, color: Color(0xFF58A6FF), size: 26),
-                                          )
-                                        else
-                                          const Icon(Icons.access_time, color: Color(0xFF8B949E), size: 22),
-                                        
-                                        const SizedBox(width: 12),
-                                        
-                                        Expanded(
-                                          child: Text(item.name, overflow: TextOverflow.ellipsis, maxLines: 1, style: const TextStyle(color: Colors.white, fontSize: 13.5)),
-                                        ),
-                                        
-                                        const SizedBox(width: 8),
-                                        
-                                        // 🌟 Open / Install ခလုတ်ကို ကြီးကြီးမားမား ဖြစ်အောင် ပြင်ထားသည်
-                                        if (isDone)
-                                          ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: isApk ? const Color(0xFF1E40AF) : const Color(0xFF047857),
-                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                              minimumSize: Size.zero,
-                                            ),
-                                            onPressed: () => _openDownloadedFile(item),
-                                            icon: Icon(isApk ? Icons.system_update : Icons.play_arrow, size: 16, color: Colors.white),
-                                            label: Text(isApk ? "သွင်းမည်" : "ဖွင့်မည်", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                                          ),
-                                        
-                                        const SizedBox(width: 8),
-                                        
-                                        // 🌟 Delete (X) ခလုတ်ကို နှိပ်ရလွယ်အောင် နေရာချဲ့ထားသည်
-                                        InkWell(
-                                          borderRadius: BorderRadius.circular(20),
-                                          onTap: () {
-                                            if (!isQueueTab) {
-                                              _confirmDeleteFinished(items: [item], title: "ဖိုင်ဖျက်မည်");
-                                            } else {
-                                              engine.deleteItem(item);
-                                            }
-                                          },
-                                          child: const Padding(
-                                            padding: EdgeInsets.all(8.0),
-                                            child: Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
-                                          ),
-                                        )
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 42, right: 6, bottom: 4),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                                          Text(
-                                            item.status == 'queued' ? "စောင့်ဆိုင်းနေသည်" : "${item.speed}  •  ${item.eta}",
-                                            style: TextStyle(
-                                              color: item.status == 'error' 
-                                                  ? const Color(0xFFFF4444)
-                                                  : isPaused
-                                                      ? const Color(0xFFE3B341)
-                                                      : (item.status == 'queued' ? const Color(0xFF58A6FF) : const Color(0xFF00E676)),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11.5,
-                                            ),
-                                          ),
-                                          Text(item.date, style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11)),
-                                        ],
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 42, right: 6),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(4),
-                                        child: LinearProgressIndicator(
-                                          value: item.progress,
-                                          backgroundColor: const Color(0xFF1E232B),
-                                          color: item.status == 'error' 
-                                              ? const Color(0xFFFF4444) 
-                                              : isPaused ? const Color(0xFFE3B341) : const Color(0xFF00E676),
-                                          minHeight: 5,
-                                        ),
-                                      ),
-                                    )
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-
-                Container(
-                  color: const Color(0xFF1E232B),
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.power_settings_new, color: Color(0xFFF85149), size: 21),
-                        tooltip: "Exit",
-                        onPressed: () => SystemNavigator.pop(),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.settings, color: Color(0xFF58A6FF), size: 21),
-                        tooltip: "Settings",
-                        onPressed: _showStorageSettingDialog,
-                      ),
-                      IconButton(
-                        icon: Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: const BoxDecoration(color: Color(0xFF238636), shape: BoxShape.circle),
-                          child: const Icon(Icons.add, color: Colors.white, size: 19),
-                        ),
-                        onPressed: _showAddLinksDialog,
-                      ),
-                      InkWell(
-                        onTap: () => setState(() => currentTab = 'Queue'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: isQueueTab ? const Color(0xFF162D4A) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isQueueTab ? const Color(0xFF38BDF8) : Colors.transparent,
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.access_time_filled, color: isQueueTab ? const Color(0xFF38BDF8) : const Color(0xFF8B949E), size: 16),
-                              const SizedBox(width: 4),
-                              Text("Queue", style: TextStyle(color: isQueueTab ? Colors.white : const Color(0xFF8B949E), fontWeight: isQueueTab ? FontWeight.bold : FontWeight.normal, fontSize: 12)),
-                              const SizedBox(width: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(color: isQueueTab ? const Color(0xFF2563EB) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(8)),
-                                child: Text("$qCount", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                              )
-                            ],
-                          ),
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () => setState(() => currentTab = 'Finished'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: !isQueueTab ? const Color(0xFF123524) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: !isQueueTab ? const Color(0xFF00E676) : Colors.transparent,
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.check_circle, color: !isQueueTab ? const Color(0xFF00E676) : const Color(0xFF8B949E), size: 16),
-                              const SizedBox(width: 4),
-                              Text("Finished", style: TextStyle(color: !isQueueTab ? Colors.white : const Color(0xFF8B949E), fontWeight: !isQueueTab ? FontWeight.bold : FontWeight.normal, fontSize: 12)),
-                              const SizedBox(width: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(color: !isQueueTab ? const Color(0xFF238636) : const Color(0xFF2A3441), borderRadius: BorderRadius.circular(8)),
-                                child: Text("$fCount", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                              )
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
               ],
             ),
           ),
