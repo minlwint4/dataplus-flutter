@@ -41,7 +41,6 @@ class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
   static Future<void> checkLocalServerUpdate(BuildContext context, {bool isManual = false}) async {
-    // 🌟 LAN IP နှစ်ခုစလုံးကို အစဉ်လိုက် လှည့်ပတ်စစ်ဆေးမည်
     final possibleIps = ['192.168.1.50', '10.10.10.10', 'localhost'];
     HttpClient? client;
     
@@ -101,13 +100,12 @@ class MainNavigationScreen extends StatefulWidget {
     }
   }
 
-  // 🌟 Force Update Dialog (နောက်မှ ခလုတ်ဖြုတ်ထားပြီး Back ခလုတ်ဖြင့် ပိတ်မရအောင် တားဆီးထားသည်)
   static void _showUpdateDialog(BuildContext context, String newVersion, String apkUrl, String changelog) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => PopScope(
-        canPop: false, // ဖုန်း၏ Back ခလုတ်နှိပ်၍ ပိတ်မရအောင် တားမြစ်ခြင်း
+        canPop: false,
         child: AlertDialog(
           backgroundColor: const Color(0xFF1E232B),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -186,8 +184,17 @@ class MainNavigationScreen extends StatefulWidget {
       if (!await saveDir.exists()) {
         await saveDir.create(recursive: true);
       }
+      
       final savePath = '${saveDir.path}/dataplus_update.apk';
       final file = File(savePath);
+      
+      // 🌟 ဖိုင်ဟောင်းရှိနေပါက အရင်ရှင်းလင်းပြီးမှ ဆွဲမည် (Parse Error ကာကွယ်ရန်)
+      if (await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+
       final sink = file.openWrite();
 
       int downloaded = 0;
@@ -203,6 +210,9 @@ class MainNavigationScreen extends StatefulWidget {
       client.close();
 
       if (context.mounted) Navigator.pop(context);
+
+      // 🌟 ဖိုင် Storage ထဲသို့ အပြည့်အဝ ပြီးစီးကြောင်း သေချာစေရန် ခဏစောင့်မည်
+      await Future.delayed(const Duration(milliseconds: 600));
 
       const channel = MethodChannel('com.dataplus/storage');
       await channel.invokeMethod('openFile', {
