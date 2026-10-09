@@ -201,7 +201,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
               final urls = text.split('\n').map((e) => e.trim()).where((e) => e.startsWith('http')).toList();
               Navigator.pop(ctx);
               if (urls.isNotEmpty) {
-                // Auto မစတင်ဘဲ Queue ထဲသို့သာ ထည့်သွင်းမည် (ကိုယ်တိုင် Storage ရွေးချယ်ပြီးမှ Start နှိပ်ရန်)
                 engine.addUrls(urls);
               }
             },
@@ -295,6 +294,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         setState(() {});
       }
     } else {
+      // Queue အတွက် list သက်သက် ဖျက်မည်
       engine.deleteFinishedItems(items, deleteActualFile: false);
       setState(() {});
     }
@@ -355,7 +355,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 1. Queue Tab တွင်သာ Storage Bar နှင့် အချက်အလက်များပြသမည် (Finish တွင် မလိုပါ)
+                // 1. Queue Tab တွင်သာ Storage Bar နှင့် Start All ခလုတ်ပြသမည်
                 if (currentTab == 'Queue') ...[
                   Container(
                     margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
@@ -493,7 +493,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     child: Row(
                       children: [
                         const Text("ဒေါင်းလုဒ်အစုအဝေးအရွယ်အစား: ", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5)),
-                        Text(_formatBytes(738300000), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text(_formatBytes(currentList.fold(0, (sum, item) => sum + 738300000)), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -504,25 +504,25 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       height: 38,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD97706),
+                          backgroundColor: const Color(0xFF238636),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                         ),
-                        onPressed: () {},
-                        icon: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.pause, size: 16, color: Colors.white),
-                            SizedBox(width: 4),
-                            Icon(Icons.pause, size: 16, color: Colors.white),
-                          ],
-                        ),
-                        label: const Text("အားလုံး ခေတ္တရပ်မည်", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          // Queue ထဲရှိ ဆိုင်းငံ့ဖိုင်များကို ကိုယ်တိုင်စတင်ရန်
+                          try {
+                            for (var item in currentList) {
+                              engine.resumeItem(item);
+                            }
+                          } catch (_) {}
+                        },
+                        icon: const Icon(Icons.play_arrow, size: 18, color: Colors.white),
+                        label: const Text("စတင်ဒေါင်းမည် (Start All)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ),
                 ],
 
-                // 2. Queue / Finished Header with Select All & Clear All (Trash/Bin icon for Clear All)
+                // 2. Queue / Finished Header with Select All & Clear All
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -572,11 +572,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                             ),
                             onPressed: () {
-                              _confirmDelete(
-                                items: currentList,
-                                title: currentTab == 'Finished' ? "ဗီဒီယိုစာရင်းအားလုံး ရှင်းလင်းမည်" : "ဆိုင်းငံ့စာရင်းအားလုံး ရှင်းလင်းမည်",
-                                isFinishedTab: currentTab == 'Finished',
-                              );
+                              final selectedItems = currentList.where((d) => d.isSelected).toList();
+                              final itemsToDelete = selectedItems.isNotEmpty ? selectedItems : currentList;
+                              if (itemsToDelete.isNotEmpty) {
+                                _confirmDelete(
+                                  items: itemsToDelete,
+                                  title: currentTab == 'Finished' ? "ဗီဒီယိုစာရင်း ရှင်းလင်းမည်" : "ဆိုင်းငံ့စာရင်း ရှင်းလင်းမည်",
+                                  isFinishedTab: currentTab == 'Finished',
+                                );
+                              }
                             },
                             icon: const Icon(Icons.delete_sweep, size: 14, color: Color(0xFFF85149)),
                             label: const Text("Clear All", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
@@ -597,7 +601,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                         )
                       : currentTab == 'Finished'
-                          // Finished အတွက် Thumbnail Grid View (ဇာတ်ကားနာမည် အပြည့်အစုံပါဝင်သည်)
+                          // Finished အတွက် Thumbnail Grid View
                           ? GridView.builder(
                               padding: const EdgeInsets.all(8),
                               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -685,7 +689,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 );
                               },
                             )
-                          // Queue အတွက် ListView ပုံစံ
+                          // Queue အတွက် ListView ပုံစံ (Start / Pause ခလုတ်များနှင့်တကွ)
                           : ListView.builder(
                               itemCount: currentList.length,
                               itemBuilder: (context, index) {
@@ -719,13 +723,28 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            Container(
-                                              padding: const EdgeInsets.all(4),
-                                              decoration: const BoxDecoration(
-                                                color: Color(0xFFD97706),
-                                                shape: BoxShape.circle,
+                                            InkWell(
+                                              onTap: () {
+                                                setState(() {
+                                                  if (item.status == 'downloading') {
+                                                    engine.pauseItem(item);
+                                                  } else {
+                                                    engine.resumeItem(item);
+                                                  }
+                                                });
+                                              },
+                                              child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: BoxDecoration(
+                                                  color: item.status == 'downloading' ? const Color(0xFFD97706) : const Color(0xFF238636),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  item.status == 'downloading' ? Icons.pause : Icons.play_arrow,
+                                                  size: 14,
+                                                  color: Colors.white,
+                                                ),
                                               ),
-                                              child: const Icon(Icons.pause, size: 12, color: Colors.white),
                                             ),
                                             const SizedBox(width: 8),
                                             Expanded(
@@ -741,6 +760,16 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                               child: const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
                                             ),
                                           ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(3),
+                                          child: LinearProgressIndicator(
+                                            value: item.progress,
+                                            backgroundColor: const Color(0xFF21262D),
+                                            color: const Color(0xFF00E676),
+                                            minHeight: 4,
+                                          ),
                                         ),
                                       ],
                                     ),
