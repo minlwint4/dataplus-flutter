@@ -41,7 +41,6 @@ class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
   static Future<void> checkLocalServerUpdate(BuildContext context, {bool isManual = false}) async {
-    // 🌟 192.168.1.50 နှင့် 10.10.10.10 ကို အစဉ်လိုက် လှည့်ပတ်စစ်ဆေးမည်
     final possibleIps = ['192.168.1.50', '10.10.10.10', 'localhost'];
     
     for (var ip in possibleIps) {
@@ -147,7 +146,7 @@ class MainNavigationScreen extends StatefulWidget {
     );
   }
 
-  static Future<void> _downloadAndInstallApk(BuildContext context, String url) async {
+  static Future<void> _downloadAndInstallApk(BuildContext context, String initialUrl) async {
     final progressNotifier = ValueNotifier<double>(0.0);
 
     showDialog(
@@ -175,53 +174,76 @@ class MainNavigationScreen extends StatefulWidget {
       ),
     );
 
+    // 🌟 10.10.10.10 ကို ဦးစားပေးပြီး IP လိပ်စာများကို အစဉ်လိုက် ဒေါင်းလုဒ်အတွက် စမ်းသပ်မည်
+    final candidateUrls = <String>[];
     try {
-      final client = HttpClient();
-      final req = await client.getUrl(Uri.parse(url));
-      final resp = await req.close();
-      final total = resp.contentLength;
+      final uri = Uri.parse(initialUrl);
+      candidateUrls.add('http://10.10.10.10:1000${uri.path}${uri.hasQuery ? '?${uri.query}' : ''}');
+      candidateUrls.add('http://192.168.1.50:1000${uri.path}${uri.hasQuery ? '?${uri.query}' : ''}');
+      candidateUrls.add(initialUrl);
+    } catch (_) {
+      candidateUrls.add(initialUrl);
+    }
 
-      final saveDir = Directory('/storage/emulated/0/Download/.Dataplus');
-      if (!await saveDir.exists()) {
-        await saveDir.create(recursive: true);
-      }
-      
-      final savePath = '${saveDir.path}/dataplus_update.apk';
-      final file = File(savePath);
-      
-      if (await file.exists()) {
-        try {
-          await file.delete();
-        } catch (_) {}
-      }
+    bool success = false;
+    final saveDir = Directory('/storage/emulated/0/Download/.Dataplus');
+    if (!await saveDir.exists()) {
+      await saveDir.create(recursive: true);
+    }
+    final savePath = '${saveDir.path}/dataplus_update.apk';
+    final file = File(savePath);
 
-      final sink = file.openWrite();
-
-      int downloaded = 0;
-      await for (var chunk in resp) {
-        sink.add(chunk);
-        downloaded += chunk.length;
-        if (total > 0) {
-          progressNotifier.value = downloaded / total;
+    for (var url in candidateUrls) {
+      HttpClient? client;
+      try {
+        if (await file.exists()) {
+          try { await file.delete(); } catch (_) {}
         }
+
+        client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 3);
+        
+        final req = await client.getUrl(Uri.parse(url));
+        final resp = await req.close();
+
+        if (resp.statusCode == 200) {
+          final total = resp.contentLength;
+          final sink = file.openWrite();
+
+          int downloaded = 0;
+          await for (var chunk in resp) {
+            sink.add(chunk);
+            downloaded += chunk.length;
+            if (total > 0) {
+              progressNotifier.value = downloaded / total;
+            }
+          }
+          await sink.flush();
+          await sink.close();
+          client.close();
+          success = true;
+          break; // အောင်မြင်စွာ ဒေါင်းလုဒ်ပြီးဆုံးပါက ထွက်မည်
+        }
+        client.close();
+      } catch (_) {
+        try { client?.close(); } catch (_) {}
       }
-      await sink.flush();
-      await sink.close();
-      client.close();
+    }
 
-      if (context.mounted) Navigator.pop(context);
+    if (context.mounted) Navigator.pop(context);
 
+    if (success) {
       await Future.delayed(const Duration(milliseconds: 600));
-
       const channel = MethodChannel('com.dataplus/storage');
       await channel.invokeMethod('openFile', {
         'path': savePath,
         'mimeType': 'application/vnd.android.package-archive',
       });
-    } catch (e) {
-      if (context.mounted) Navigator.pop(context);
+    } else {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update ဒေါင်းမရပါ: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ Update ဖိုင် ဒေါင်းလုဒ်ဆွဲ၍မရပါ (Network လိုင်းကို စစ်ဆေးပါ)')),
+        );
       }
     }
   }
@@ -289,6 +311,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
