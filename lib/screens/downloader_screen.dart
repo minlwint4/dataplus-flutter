@@ -294,7 +294,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         setState(() {});
       }
     } else {
-      engine.deleteFinishedItems(items, deleteActualFile: false);
+      // Queue အတွက် list သက်သက် ဖျက်မည်
+      engine.deleteSelected(items);
       setState(() {});
     }
   }
@@ -354,7 +355,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 1. Queue Tab တွင်သာ Storage Bar ပြသမည်
+                // 1. Queue Tab တွင်သာ Storage Bar နှင့် Start All ခလုတ် ပြသမည် (Finish တွင် လုံးဝမပါပါ)
                 if (currentTab == 'Queue') ...[
                   Container(
                     margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
@@ -479,6 +480,22 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 38,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF238636),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        onPressed: () => engine.startAllQueued(),
+                        icon: const Icon(Icons.play_arrow, size: 18, color: Colors.white),
+                        label: const Text("စတင်ဒေါင်းမည် (Start All)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ),
                     ),
                   ),
                 ],
@@ -650,7 +667,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 );
                               },
                             )
-                          // Queue အတွက် ListView ပုံစံ
+                          // Queue အတွက် ListView ပုံစံ (Start / Pause ခလုတ်များနှင့်တကွ)
                           : ListView.builder(
                               itemCount: currentList.length,
                               itemBuilder: (context, index) {
@@ -681,6 +698,22 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                                     item.isSelected = val ?? false;
                                                   });
                                                 },
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            InkWell(
+                                              onTap: () => engine.togglePauseResume(item),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: BoxDecoration(
+                                                  color: item.status == 'downloading' ? const Color(0xFFD97706) : const Color(0xFF238636),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  item.status == 'downloading' ? Icons.pause : Icons.play_arrow,
+                                                  size: 14,
+                                                  color: Colors.white,
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
