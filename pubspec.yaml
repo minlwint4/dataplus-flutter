@@ -15,8 +15,8 @@ dependencies:
   open_filex: ^4.5.0
   video_player: ^2.9.2
   chewie: ^1.8.5
-  # Force a stable, compatible version of package_info_plus
-  package_info_plus: ^8.0.0 
+  package_info_plus: ^8.0.0
+  shared_preferences: ^2.2.3
 
 dev_dependencies:
   flutter_test:
