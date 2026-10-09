@@ -60,7 +60,7 @@ class MainNavigationScreen extends StatefulWidget {
           final dynamic rawCode = data['version_code'] ?? 999;
           final int serverVersionCode = rawCode is int ? rawCode : int.tryParse(rawCode.toString()) ?? 999;
           
-          final String apkUrl = data['apk_url'] ?? 'http://$ip:1000/api/download/apk?app=dataplus';
+          final String apkUrl = 'http://$ip:1000/api/download/apk?app=dataplus';
           final String changelog = data['changelog'] ?? 'လုပ်ဆောင်ချက်အသစ်များ ပါဝင်ပါသည်';
 
           client.close();
@@ -174,7 +174,6 @@ class MainNavigationScreen extends StatefulWidget {
       ),
     );
 
-    // 🌟 10.10.10.10 ကို ဦးစားပေးပြီး IP လိပ်စာများကို အစဉ်လိုက် ဒေါင်းလုဒ်အတွက် စမ်းသပ်မည်
     final candidateUrls = <String>[];
     try {
       final uri = Uri.parse(initialUrl);
@@ -222,7 +221,7 @@ class MainNavigationScreen extends StatefulWidget {
           await sink.close();
           client.close();
           success = true;
-          break; // အောင်မြင်စွာ ဒေါင်းလုဒ်ပြီးဆုံးပါက ထွက်မည်
+          break;
         }
         client.close();
       } catch (_) {
@@ -311,7 +310,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
