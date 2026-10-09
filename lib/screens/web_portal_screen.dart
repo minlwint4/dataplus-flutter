@@ -157,6 +157,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
             await _sendStorageToWeb();
 
+            // 🌟 1. Web Portal Event Bridges
             await _controller.runJavaScript('''
               (function() {
                 var origSetItem = localStorage.setItem;
@@ -223,7 +224,38 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               })();
             ''');
 
-            // 🌟 သိမ်းဆည်းထားသော Username ကို အလိုအလျောက် ထည့်သွင်းပေးခြင်း
+            // 🌟 2. Fast Smooth Scrolling & Poster Caching Optimizer Injection
+            await _controller.runJavaScript('''
+              (function() {
+                try {
+                  // Add CSS for Hardware Acceleration and Content-Visibility
+                  var fastStyle = document.getElementById('dp-fast-scroll-style');
+                  if (!fastStyle) {
+                    fastStyle = document.createElement('style');
+                    fastStyle.id = 'dp-fast-scroll-style';
+                    fastStyle.innerHTML = `
+                      * {
+                        -webkit-overflow-scrolling: touch !important;
+                      }
+                      img {
+                        content-visibility: auto;
+                        contain-intrinsic-size: 200px 300px;
+                      }
+                    `;
+                    document.head.appendChild(fastStyle);
+                  }
+
+                  // Force Lazy Loading & Async Decoding on all Movie Posters
+                  var imgs = document.querySelectorAll('img');
+                  for (var i = 0; i < imgs.length; i++) {
+                    imgs[i].setAttribute('loading', 'lazy');
+                    imgs[i].setAttribute('decoding', 'async');
+                  }
+                } catch(e) {}
+              })();
+            ''');
+
+            // 🌟 3. Username Auto-fill
             final savedName = await _getSavedUserName();
             if (savedName != null && savedName.isNotEmpty) {
               await _controller.runJavaScript('''
@@ -311,7 +343,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     } catch (_) {}
   }
 
-  // 🌟 Username ကို SharedPreferences နှင့် File နှစ်မျိုးစလုံးတွင် လုံခြုံစွာ သိမ်းဆည်းခြင်း
   Future<void> _saveUserNamePermanently(String name) async {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return;
@@ -328,7 +359,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     } catch (_) {}
   }
 
-  // 🌟 SharedPreferences သို့မဟုတ် File မှ Username ကို ပြန်လည်ဖတ်ယူခြင်း
   Future<String?> _getSavedUserName() async {
     try {
       final prefs = await SharedPreferences.getInstance();
