@@ -1,8 +1,3 @@
-ပေးပို့ထားသော **`lib/main.dart`** ကုဒ်ဖိုင်ထဲတွင် "နောက်မှ" ခလုတ်ကို ဖြုတ်ပေးပြီး ဖုန်း၏ Back ခလုတ် သို့မဟုတ် Dialog အပြင်ဘက်ကို နှိပ်၍ ကျော်လွန်၍မရအောင် (`PopScope(canPop: false)`) Force Update ပုံစံအဖြစ် အပြည့်အစုံ ပြင်ဆင်ရေးသားပေးလိုက်ပါတယ်ခင်ဗျာ။
-
-အောက်ပါကုဒ်အပြည့်အစုံကို `lib/main.dart` ဖိုင်အဟောင်းနေရာတွင် အစားထိုး ကူးထည့်လိုက်ပါ -
-
-```dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -314,5 +309,3 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 }
-
-```
