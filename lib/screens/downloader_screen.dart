@@ -227,7 +227,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             title: Row(
               children: [
-                const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 22),
+                const Icon(Icons.delete_forever, color: Color(0xFFF85149), size: 26),
                 const SizedBox(width: 8),
                 Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ],
@@ -294,7 +294,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         setState(() {});
       }
     } else {
-      // Queue အတွက် list သက်သက် ဖျက်မည်
       engine.deleteSelected(items);
       setState(() {});
     }
@@ -347,6 +346,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           (currentTab == 'Queue' && d.status != 'finished')
         ).toList();
 
+        final totalQueueBytes = engine.downloads
+            .where((d) => d.status != 'finished')
+            .fold(0, (sum, item) => sum + item.sizeBytes);
+
         final isInternalActive = engine.storageTarget == 'internal';
         final isSdActive = engine.storageTarget == 'sdcard';
 
@@ -355,7 +358,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 1. Queue Tab တွင်သာ Storage Bar နှင့် Start All ခလုတ် ပြသမည် (Finish တွင် လုံးဝမပါပါ)
+                // 1. Queue Tab တွင်သာ Storage Bar နှင့် စုစုပေါင်းဆိုက်ပြသမည် (Finish တွင် မပါပါ)
                 if (currentTab == 'Queue') ...[
                   Container(
                     margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
@@ -483,6 +486,21 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     ),
                   ),
                   Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16222F),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF2563EB), width: 0.8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text("ဒေါင်းလုဒ်အစုအဝေးအရွယ်အစား: ", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5)),
+                        Text(_formatBytes(totalQueueBytes), style: const TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: SizedBox(
                       width: double.infinity,
@@ -500,10 +518,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ],
 
-                // 2. Queue / Finished Header with Select All & Clear All
+                // 2. Queue / Finished Header with Select All & Clear All (ကြီးမားသော Bin ပုံစံ Clear All ခလုတ်)
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFF16222F),
                     borderRadius: BorderRadius.circular(6),
@@ -514,11 +532,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(currentTab == 'Finished' ? Icons.video_library : Icons.hourglass_empty, color: const Color(0xFF58A6FF), size: 16),
+                          Icon(currentTab == 'Finished' ? Icons.video_library : Icons.hourglass_empty, color: const Color(0xFF58A6FF), size: 18),
                           const SizedBox(width: 6),
                           Text(
                             currentTab == 'Finished' ? "FINISHED (ဗီဒီယိုများ - $fCount)" : "QUEUE (ဆိုင်းငံ့စာရင်း - $qCount)",
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -527,9 +545,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           OutlinedButton(
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: Color(0xFF2563EB)),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                              minimumSize: const Size(0, 28),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              minimumSize: const Size(0, 32),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                             onPressed: () {
                               setState(() {
@@ -539,15 +557,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 }
                               });
                             },
-                            child: const Text("Select All", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                            child: const Text("Select All", style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11.5)),
                           ),
-                          const SizedBox(width: 6),
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFFB91C1C)),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                              minimumSize: const Size(0, 28),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFB91C1C),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              minimumSize: const Size(0, 32),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                             onPressed: () {
                               final selectedItems = currentList.where((d) => d.isSelected).toList();
@@ -560,8 +578,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 );
                               }
                             },
-                            icon: const Icon(Icons.delete_sweep, size: 14, color: Color(0xFFF85149)),
-                            label: const Text("Clear All", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
+                            icon: const Icon(Icons.delete_sweep, size: 18, color: Colors.white),
+                            label: const Text("Clear All", style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       )
@@ -579,7 +597,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                         )
                       : currentTab == 'Finished'
-                          // Finished အတွက် Thumbnail Grid View
+                          // Finished အတွက် Thumbnail Grid View (ဇာတ်ကားနာမည် အပြည့်အစုံပါဝင်သည်)
                           ? GridView.builder(
                               padding: const EdgeInsets.all(8),
                               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -667,7 +685,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 );
                               },
                             )
-                          // Queue အတွက် ListView ပုံစံ (Start / Pause ခလုတ်များနှင့်တကွ)
+                          // Queue အတွက် ListView ပုံစံ (File Size, Data Speed, ETA အပြည့်အစုံပါဝင်သည်)
                           : ListView.builder(
                               itemCount: currentList.length,
                               itemBuilder: (context, index) {
@@ -729,6 +747,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                               onTap: () => _confirmDelete(items: [item], title: "စာရင်းဖျက်ခြင်း", isFinishedTab: false),
                                               child: const Icon(Icons.delete_outline, color: Color(0xFFF85149), size: 20),
                                             ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(_formatBytes(item.sizeBytes), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                            Text("${item.speed} • ${item.eta}", style: const TextStyle(color: Color(0xFF00E676), fontSize: 11, fontWeight: FontWeight.bold)),
+                                            Text("${(item.progress * 100).toStringAsFixed(0)}%", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                                           ],
                                         ),
                                         const SizedBox(height: 6),
