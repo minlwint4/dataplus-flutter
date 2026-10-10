@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/download_engine.dart';
 
 class WebPortalScreen extends StatefulWidget {
@@ -23,13 +22,14 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   bool _isConnectionError = false;
   DateTime? _lastBackPressTime;
 
+  // 🌐 ချိတ်ဆက်စမ်းသပ်မည့် ဆာဗာ IP (၂) ခု
   static const List<String> _servers = [
     'http://10.10.10.10:1000',
     'http://192.168.1.50:1000',
   ];
   String _activeBaseUrl = 'http://10.10.10.10:1000';
 
-  static const String _userNameFilePath = '/storage/emulated/0/.Dataplus/user_name.txt';
+  static const String _userNameFilePath = '/storage/emulated/0/Download/DataPlus/user_name.txt';
 
   @override
   void initState() {
@@ -38,6 +38,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _connectToFastestServer();
   }
 
+  // ⚡ IP နှစ်ခုစလုံးကို တစ်ပြိုင်နက်လှမ်းခေါ်ပြီး အရင်ဆုံး မိသည့် IP ကို ရွေးချယ်ချိတ်ဆက်ခြင်း
   Future<void> _connectToFastestServer() async {
     setState(() {
       _isLoading = true;
@@ -62,11 +63,13 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           failedCount++;
         }
         if (failedCount >= _servers.length && !completer.isCompleted) {
+          // နှစ်ခုစလုံး ချက်ချင်း မမိပါက မူရင်း 10.10.10.10 ကို Default ထားမည်
           completer.complete(_servers.first);
         }
       }();
     }
 
+    // ၁.၅ စက္ကန့်အတွင်း မည်သည့် IP မှ မတက်လာပါက Safeguard
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (!completer.isCompleted) {
         completer.complete(_servers.first);
@@ -77,23 +80,13 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     client.close();
 
     _activeBaseUrl = selectedHost;
-    // 🌟 Server ဆီမှ folder.txt နှင့် search script အသစ်များကို တိုက်ရိုက်ဆွဲယူရန် no-cache headers ဖြင့် ခေါ်ယူခြင်း
-    _controller.loadRequest(
-      Uri.parse('$_activeBaseUrl/'),
-      headers: const {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-    );
+    _controller.loadRequest(Uri.parse('$_activeBaseUrl/'));
   }
 
   void _initController() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0A0A0A))
-      // 🌟 HTTP Resource cache အဟောင်းများကို ရှင်းလင်းပေးခြင်း (LocalStorage နှင့် Username မပျက်ပါ)
-      ..clearCache()
       ..addJavaScriptChannel(
         'DataPlusUserBridge',
         onMessageReceived: (JavaScriptMessage message) {
@@ -143,6 +136,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             return NavigationDecision.navigate;
           },
           onWebResourceError: (WebResourceError error) {
+            // စာမျက်နှာဖွင့်မရပါက Retry Screen ပြသရန်
             if (error.isForMainFrame ?? true) {
               setState(() {
                 _isLoading = false;
@@ -160,6 +154,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               setState(() => _isLoading = false);
             }
 
+            // လက်ရှိ မိနေသော Server Host URL အတိုင်း အချက်အလက်ပို့ခြင်း
             final currentUri = Uri.tryParse(url);
             if (currentUri != null && currentUri.host.isNotEmpty) {
               _activeBaseUrl = '${currentUri.scheme}://${currentUri.host}:${currentUri.port}';
@@ -167,7 +162,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
             await _sendStorageToWeb();
 
-            // 🌟 1. Web Portal Event Bridges
             await _controller.runJavaScript('''
               (function() {
                 var origSetItem = localStorage.setItem;
@@ -234,7 +228,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               })();
             ''');
 
-            // 🌟 2. Username Auto-fill (အသုံးပြုသူ အမည်များကို အလိုအလျောက် ပြန်လည်ဖြည့်သွင်းခြင်း)
             final savedName = await _getSavedUserName();
             if (savedName != null && savedName.isNotEmpty) {
               await _controller.runJavaScript('''
@@ -278,11 +271,13 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           .toList();
     }
 
+    // ⚡ 10.10.10.10 သို့မဟုတ် 192.168.1.50 မည်သည့်လင့်ခ်ပါလာပါစေ လက်ရှိ မိနေသည့် _activeBaseUrl သို့ အလိုအလျောက် ပြောင်းပေးခြင်း
     List<String> finalUrls = rawUrls.map((u) {
       String link = u;
       if (!link.startsWith('http')) {
         link = link.startsWith('/') ? '$_activeBaseUrl$link' : '$_activeBaseUrl/$link';
       } else {
+        // IP တစ်ခုခု ပါလာပါက လက်ရှိမိနေသော IP သို့ ညှိပေးခြင်း
         for (final server in _servers) {
           if (link.startsWith(server)) {
             link = link.replaceFirst(server, _activeBaseUrl);
@@ -326,10 +321,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('saved_username', cleanName);
-
-      final dir = Directory('/storage/emulated/0/.Dataplus');
+      final dir = Directory('/storage/emulated/0/Download/DataPlus');
       if (!await dir.exists()) {
         await dir.create(recursive: true);
       }
@@ -340,19 +332,10 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
   Future<String?> _getSavedUserName() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      String? name = prefs.getString('saved_username');
-      if (name != null && name.trim().isNotEmpty) {
-        return name.trim();
-      }
-
       final file = File(_userNameFilePath);
       if (await file.exists()) {
-        final fileContent = (await file.readAsString()).trim();
-        if (fileContent.isNotEmpty) {
-          await prefs.setString('saved_username', fileContent);
-          return fileContent;
-        }
+        final name = (await file.readAsString()).trim();
+        if (name.isNotEmpty) return name;
       }
     } catch (_) {}
     return null;
@@ -365,15 +348,9 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
       onPopInvokedWithResult: (bool didPop, Object? result) async {
         if (didPop) return;
 
-        final currentUrl = await _controller.currentUrl() ?? '';
-        final uri = Uri.tryParse(currentUrl);
-        final path = uri?.path ?? '';
-
         if (await _controller.canGoBack()) {
-          if (path.isNotEmpty && path != '/' && path != '/?') {
-            await _controller.goBack();
-            return;
-          }
+          await _controller.goBack();
+          return;
         }
 
         final now = DateTime.now();
@@ -414,6 +391,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                 const Center(
                   child: CircularProgressIndicator(color: Color(0xFF00E676)),
                 ),
+              // ⚠️ Wi-Fi မမိသေးပါက ပြသမည့် Retry Button
               if (_isConnectionError && !_isLoading)
                 Center(
                   child: Container(
