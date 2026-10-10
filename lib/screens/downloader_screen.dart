@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:android_intent_plus/android_intent.dart';
+import 'package:android_intent_plus/flag.dart';
 import '../services/download_engine.dart';
 import '../main.dart'; 
 
@@ -273,90 +274,139 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ],
                 ),
 
-                // 🌟 USB Debugging / Xiaomi My Device Shortcut ခလုတ်
+                // 🌟 USB Debugging / Xiaomi My Device အဆင့် (၂) ဆင့် ခလုတ်များ
                 const Divider(color: Color(0xFF30363D), height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const Text(
+                      "Developer Mode & USB Debugging",
+                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      "ဖွင့်ရန် အဆင့် (၂) ဆင့်:",
+                      style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
                       children: [
-                        Text("Developer Mode", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        Text("USB Debugging Setting", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                        // ခလုတ် ၁: My device သို့ တိုက်ရိုက်သွားရန် (အပြာရောင်)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1F6FEB),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                              minimumSize: Size.zero,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                            onPressed: () async {
+                              bool opened = false;
+                              // ၁။ Xiaomi MyDeviceInfoActivity တိုက်ရိုက် စမ်းသပ်ဖွင့်မည်
+                              try {
+                                const miuiIntent = AndroidIntent(
+                                  action: 'android.intent.action.MAIN',
+                                  package: 'com.android.settings',
+                                  componentName: 'com.android.settings.Settings\$MyDeviceInfoActivity',
+                                  flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+                                );
+                                await miuiIntent.launch();
+                                opened = true;
+                              } catch (_) {}
+
+                              // ၂။ Android စံ About Phone ဖွင့်မည်
+                              if (!opened) {
+                                try {
+                                  const infoIntent = AndroidIntent(
+                                    action: 'android.settings.DEVICE_INFO_SETTINGS',
+                                    flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+                                  );
+                                  await infoIntent.launch();
+                                  opened = true;
+                                } catch (_) {}
+                              }
+
+                              // ၃။ Settings ပင်မစာမျက်နှာကို ၁၀၀% မပျက်မကွက် ဖွင့်မည် (ထိပ်ဆုံးတွင် My device အသင့်ရှိသည်)
+                              if (!opened) {
+                                try {
+                                  const settingsIntent = AndroidIntent(
+                                    action: 'android.settings.SETTINGS',
+                                    flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+                                  );
+                                  await settingsIntent.launch();
+                                } catch (_) {}
+                              }
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      "ℹ️ 'My device' > 'Detailed info and specs' ထဲမှ 'OS version' ကို ၇ ချက် နှိပ်ပါ",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
+                                    duration: Duration(seconds: 5),
+                                    backgroundColor: Color(0xFF1E293B),
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.phone_android, size: 13, color: Colors.white),
+                            label: const Text(
+                              "၁။ My device",
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+
+                        // ခလုတ် ၂: USB Debugging တိုက်ရိုက်ဖွင့်ရန် (အစိမ်းရောင်)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF238636),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                              minimumSize: Size.zero,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                            onPressed: () async {
+                              try {
+                                const devIntent = AndroidIntent(
+                                  action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS',
+                                  flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+                                );
+                                await devIntent.launch();
+                              } catch (_) {
+                                const settingsIntent = AndroidIntent(
+                                  action: 'android.settings.SETTINGS',
+                                  flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+                                );
+                                await settingsIntent.launch();
+                              }
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      "⚡ Developer Options ထဲမှ 'USB debugging' ကို On ပေးပါ",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
+                                    duration: Duration(seconds: 4),
+                                    backgroundColor: Color(0xFF1E293B),
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.adb_rounded, size: 13, color: Colors.white),
+                            label: const Text(
+                              "၂။ USB Debug",
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1F6FEB),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        minimumSize: Size.zero,
-                      ),
-                      onPressed: () async {
-                        bool opened = false;
-
-                        // ၁။ Developer Options ပွင့်ပြီးသား ဖြစ်ပါက တိုက်ရိုက်ဖွင့်မည်
-                        try {
-                          const intent = AndroidIntent(
-                            action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS',
-                          );
-                          await intent.launch();
-                          opened = true;
-                        } catch (_) {}
-
-                        // ၂။ Xiaomi "My device" စာမျက်နှာဆီ တိုက်ရိုက် ခေါ်ယူရန် ကြိုးစားမည်
-                        if (!opened) {
-                          try {
-                            const intent = AndroidIntent(
-                              action: 'android.intent.action.MAIN',
-                              package: 'com.android.settings',
-                              componentName: 'com.android.settings.Settings\$MyDeviceInfoActivity',
-                            );
-                            await intent.launch();
-                            opened = true;
-                          } catch (_) {}
-                        }
-
-                        // ၃။ Android Device Info စံ Intent ဖြင့် ထပ်မံကြိုးစားမည်
-                        if (!opened) {
-                          try {
-                            const intent = AndroidIntent(
-                              action: 'android.settings.DEVICE_INFO_SETTINGS',
-                            );
-                            await intent.launch();
-                            opened = true;
-                          } catch (_) {}
-                        }
-
-                        // ၄။ အထက်ပါနည်းများ မရပါက Settings ပင်မစာမျက်နှာကို ၁၀၀% မပျက်မကွက် ဖွင့်ပေးမည်
-                        // (Xiaomi Settings ပွင့်သည်နှင့် ထိပ်ဆုံးနံပါတ် ၁ တွင် "My device" အသင့်ရှိပါသည်)
-                        if (!opened) {
-                          try {
-                            const intent = AndroidIntent(
-                              action: 'android.settings.SETTINGS',
-                            );
-                            await intent.launch();
-                            opened = true;
-                          } catch (_) {}
-                        }
-
-                        // 🌟 အသုံးပြုသူ သိရှိစေရန် အတိအကျ လမ်းညွှန်စာ ပြသခြင်း
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "ℹ️ 'My device' > 'Detailed info and specs' ထဲမှ 'OS version' (သို့) 'MIUI version' ကို ၇ ချက် နှိပ်ပေးပါ",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                              duration: Duration(seconds: 6),
-                              backgroundColor: Color(0xFF1E293B),
-                            ),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.adb_rounded, size: 14, color: Colors.white),
-                      label: const Text("ဖွင့်ရန်", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                    )
                   ],
                 ),
               ],
