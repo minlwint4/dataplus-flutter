@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/web_portal_screen.dart';
 import 'screens/downloader_screen.dart';
 
@@ -257,9 +258,46 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    // 🌟 App စတက်လာတာနဲ့ Local မှာ သိမ်းထားတဲ့ Username/Device ID ကို Server နဲ့ အလိုအလျောက် ပြန်ချိတ်မည်
+    _syncPersistentUser();
+
     Future.delayed(const Duration(milliseconds: 1500), () {
       MainNavigationScreen.checkLocalServerUpdate(context, isManual: false);
     });
+  }
+
+  Future<void> _syncPersistentUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedName = prefs.getString('customer_name');
+      String? savedDeviceId = prefs.getString('device_id');
+
+      if (savedDeviceId == null || savedDeviceId.isEmpty) {
+        savedDeviceId = DateTime.now().millisecondsSinceEpoch.toString();
+        await prefs.setString('device_id', savedDeviceId);
+      }
+
+      if (savedName != null && savedName.isNotEmpty) {
+        final possibleIps = ['192.168.1.50', '10.10.10.10', 'localhost'];
+        for (var ip in possibleIps) {
+          HttpClient? client;
+          try {
+            client = HttpClient();
+            client.connectionTimeout = const Duration(seconds: 1);
+            final req = await client.postUrl(Uri.parse('http://$ip:1000/api/user/identify'));
+            req.headers.set('Content-Type', 'application/json');
+            req.add(utf8.encode(jsonEncode({'name': savedName, 'device_id': savedDeviceId})));
+            final resp = await req.close();
+            client.close();
+            if (resp.statusCode == 200) {
+              break;
+            }
+          } catch (_) {
+            try { client?.close(); } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Widget _buildSlimTabItem({
