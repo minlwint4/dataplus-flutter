@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:android_intent_plus/android_intent.dart';
 import '../services/download_engine.dart';
 import '../main.dart'; 
 
@@ -268,6 +269,52 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       },
                       icon: const Icon(Icons.refresh, size: 14, color: Colors.white),
                       label: const Text("Update စစ်မည်", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    )
+                  ],
+                ),
+                // 🌟 USB Debugging / Developer Mode Shortcut ခလုတ်
+                const Divider(color: Color(0xFF30363D), height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Developer Mode", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        Text("USB Debugging Setting", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                      ],
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1F6FEB),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                      ),
+                      onPressed: () async {
+                        try {
+                          const intent = AndroidIntent(
+                            action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS',
+                          );
+                          await intent.launch();
+                        } catch (_) {
+                          try {
+                            const fallback = AndroidIntent(
+                              action: 'android.settings.DEVICE_INFO_SETTINGS',
+                            );
+                            await fallback.launch();
+                          } catch (_) {}
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("ℹ️ Developer Mode မပွင့်သေးပါက 'Build number' ကို ၇ ချက် နှိပ်ပေးပါ"),
+                                duration: Duration(seconds: 4),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.adb_rounded, size: 14, color: Colors.white),
+                      label: const Text("ဖွင့်ရန်", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                     )
                   ],
                 ),
