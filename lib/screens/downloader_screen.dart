@@ -272,7 +272,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     )
                   ],
                 ),
-                // 🌟 USB Debugging / Developer Mode Shortcut ခလုတ်
+
+                // 🌟 USB Debugging / Developer Mode Shortcut ခလုတ် (About Phone သို့ တိုက်ရိုက်သွားမည့်စနစ်)
                 const Divider(color: Color(0xFF30363D), height: 18),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -291,26 +292,66 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         minimumSize: Size.zero,
                       ),
                       onPressed: () async {
+                        bool opened = false;
+
+                        // အဆင့် (၁) - Developer Options ပွင့်ပြီးသားဖြစ်ပါက တိုက်ရိုက်ဖွင့်မည်
                         try {
                           const intent = AndroidIntent(
                             action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS',
                           );
                           await intent.launch();
-                        } catch (_) {
+                          opened = true;
+                        } catch (_) {}
+
+                        // အဆင့် (၂) - မပွင့်သေးပါက "About Phone" တိုက်ရိုက် Intent ကို စမ်းဖွင့်မည်
+                        if (!opened) {
                           try {
-                            const fallback = AndroidIntent(
+                            const intent = AndroidIntent(
                               action: 'android.settings.DEVICE_INFO_SETTINGS',
                             );
-                            await fallback.launch();
+                            await intent.launch();
+                            opened = true;
                           } catch (_) {}
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("ℹ️ Developer Mode မပွင့်သေးပါက 'Build number' ကို ၇ ချက် နှိပ်ပေးပါ"),
-                                duration: Duration(seconds: 4),
-                              ),
+                        }
+
+                        // အဆင့် (၃) - Xiaomi / Custom ROM Component ဖြင့် ထပ်မံကြိုးစားမည်
+                        if (!opened) {
+                          try {
+                            const intent = AndroidIntent(
+                              action: 'android.intent.action.MAIN',
+                              package: 'com.android.settings',
+                              componentName: 'com.android.settings.Settings\$DeviceInfoSettingsActivity',
                             );
-                          }
+                            await intent.launch();
+                            opened = true;
+                          } catch (_) {}
+                        }
+
+                        // အဆင့် (၄) - အထက်ပါနည်းများ မရသေးပါက Settings စာမျက်နှာကို ၁၀၀% မပျက်မကွက် ဖွင့်ပေးမည်
+                        // (Xiaomi တွင် Settings ဖွင့်လိုက်သည်နှင့် "About Phone" သည် နံပါတ် ၁ ထိပ်ဆုံးတွင် အသင့်ရှိပါသည်)
+                        if (!opened) {
+                          try {
+                            const intent = AndroidIntent(
+                              action: 'android.settings.SETTINGS',
+                            );
+                            await intent.launch();
+                            opened = true;
+                          } catch (_) {}
+                        }
+
+                        // အသုံးပြုသူ သိရှိစေရန် အသိပေးစာ ပြသခြင်း
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "ℹ️ 'About Phone' (ဖုန်းအကြောင်း) ထဲမှ 'Build number' သို့မဟုတ် OS Version ကို ၇ ချက် နှိပ်ပေးပါ",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                              duration: Duration(seconds: 5),
+                              backgroundColor: Color(0xFF1E293B),
+                            ),
+                          );
                         }
                       },
                       icon: const Icon(Icons.adb_rounded, size: 14, color: Colors.white),
