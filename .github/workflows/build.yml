@@ -44,9 +44,9 @@ jobs:
                 all { ArtifactRepository repo ->
                     if (repo instanceof MavenArtifactRepository) {
                         def url = repo.url.toString()
-                        if (url.contains("repo.maven.apache.org") || url.contains("repo1.maven.org")) {
-                            repo.setUrl(mirrorUrl)
-                        }
+                            if (url.contains("repo.maven.apache.org") || url.contains("repo1.maven.org")) {
+                                repo.setUrl(mirrorUrl)
+                            }
                     }
                 }
             }
@@ -64,7 +64,8 @@ jobs:
       run: |
         echo "Generating fresh Android Project structure..."
         rm -rf android
-        flutter create . --org com.example --project-name dataplus_app
+        # 🌟 com.example အစား တရားဝင် com.dataplus သို့ ပြောင်းလဲခြင်း
+        flutter create . --org com.dataplus --project-name dataplus_app
 
         mkdir -p android
         echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
@@ -72,7 +73,7 @@ jobs:
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
 
-        # 🌟 Kotlin Version 1.9.24 သို့ တိကျစွာ သတ်မှတ်ခြင်း (Error ဖြေရှင်းရန်)
+        # 🌟 Kotlin Version 1.9.24 သို့ တိကျစွာ သတ်မှတ်ခြင်း
         if [ -f "android/settings.gradle" ]; then
           sed -i 's/org.jetbrains.kotlin.android" version "[^"]*"/org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle
         fi
@@ -98,9 +99,9 @@ jobs:
 
         sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
 
-        mkdir -p android/app/src/main/kotlin/com/example/dataplus_app
+        mkdir -p android/app/src/main/kotlin/com/dataplus/dataplus_app
         printf '%s\n' \
-          'package com.example.dataplus_app' \
+          'package com.dataplus.dataplus_app' \
           '' \
           'import android.content.Intent' \
           'import android.net.Uri' \
@@ -188,7 +189,7 @@ jobs:
           '            }' \
           '        }' \
           '    }' \
-          '}' > android/app/src/main/kotlin/com/example/dataplus_app/MainActivity.kt
+          '}' > android/app/src/main/kotlin/com/dataplus/dataplus_app/MainActivity.kt
 
     - name: Install Dependencies & Clear Cache
       run: |
@@ -206,7 +207,7 @@ jobs:
           dart run flutter_launcher_icons
         fi
 
-    - name: Ensure Persistent Release Keystore
+    - name: Ensure Persistent Release Keystore & v1/v2 Signature
       run: |
         if [ ! -f "dataplus.jks" ]; then
           keytool -genkey -v -keystore dataplus.jks -alias dataplus -keyalg RSA -keysize 2048 -validity 10000 -storepass dataplus123 -keypass dataplus123 -dname "CN=DataPlus, OU=App, O=DataPlus, L=Yangon, C=MM"
@@ -218,8 +219,9 @@ jobs:
         fi
         cp dataplus.jks android/app/dataplus.jks
 
+        # 🌟 v1SigningEnabled true နှင့် v2SigningEnabled true အပြည့်အစုံ ထည့်သွင်းခြင်း
         if ! grep -q "signingConfigs.release" android/app/build.gradle; then
-          sed -i '/buildTypes {/i \    signingConfigs {\n        release {\n            storeFile file("dataplus.jks")\n            storePassword "dataplus123"\n            keyAlias "dataplus"\n            keyPassword "dataplus123"\n        }\n    }' android/app/build.gradle
+          sed -i '/buildTypes {/i \    signingConfigs {\n        release {\n            storeFile file("dataplus.jks")\n            storePassword "dataplus123"\n            keyAlias "dataplus"\n            keyPassword "dataplus123"\n            v1SigningEnabled true\n            v2SigningEnabled true\n        }\n    }' android/app/build.gradle
           sed -i -E 's/signingConfig =? signingConfigs\.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
         fi
 
