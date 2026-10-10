@@ -77,13 +77,23 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     client.close();
 
     _activeBaseUrl = selectedHost;
-    _controller.loadRequest(Uri.parse('$_activeBaseUrl/'));
+    // 🌟 Server ဆီမှ folder.txt နှင့် search script အသစ်များကို တိုက်ရိုက်ဆွဲယူရန် no-cache headers ဖြင့် ခေါ်ယူခြင်း
+    _controller.loadRequest(
+      Uri.parse('$_activeBaseUrl/'),
+      headers: const {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    );
   }
 
   void _initController() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0A0A0A))
+      // 🌟 HTTP Resource cache အဟောင်းများကို ရှင်းလင်းပေးခြင်း (LocalStorage နှင့် Username မပျက်ပါ)
+      ..clearCache()
       ..addJavaScriptChannel(
         'DataPlusUserBridge',
         onMessageReceived: (JavaScriptMessage message) {
@@ -224,38 +234,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               })();
             ''');
 
-            // 🌟 2. Fast Smooth Scrolling & Poster Caching Optimizer Injection
-            await _controller.runJavaScript('''
-              (function() {
-                try {
-                  // Add CSS for Hardware Acceleration and Content-Visibility
-                  var fastStyle = document.getElementById('dp-fast-scroll-style');
-                  if (!fastStyle) {
-                    fastStyle = document.createElement('style');
-                    fastStyle.id = 'dp-fast-scroll-style';
-                    fastStyle.innerHTML = `
-                      * {
-                        -webkit-overflow-scrolling: touch !important;
-                      }
-                      img {
-                        content-visibility: auto;
-                        contain-intrinsic-size: 200px 300px;
-                      }
-                    `;
-                    document.head.appendChild(fastStyle);
-                  }
-
-                  // Force Lazy Loading & Async Decoding on all Movie Posters
-                  var imgs = document.querySelectorAll('img');
-                  for (var i = 0; i < imgs.length; i++) {
-                    imgs[i].setAttribute('loading', 'lazy');
-                    imgs[i].setAttribute('decoding', 'async');
-                  }
-                } catch(e) {}
-              })();
-            ''');
-
-            // 🌟 3. Username Auto-fill
+            // 🌟 2. Username Auto-fill (အသုံးပြုသူ အမည်များကို အလိုအလျောက် ပြန်လည်ဖြည့်သွင်းခြင်း)
             final savedName = await _getSavedUserName();
             if (savedName != null && savedName.isNotEmpty) {
               await _controller.runJavaScript('''
