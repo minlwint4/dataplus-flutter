@@ -64,7 +64,6 @@ jobs:
       run: |
         echo "Generating fresh Android Project structure..."
         rm -rf android
-        # 🌟 com.example အစား တရားဝင် com.dataplus သို့ ပြောင်းလဲခြင်း
         flutter create . --org com.dataplus --project-name dataplus_app
 
         mkdir -p android
@@ -73,7 +72,6 @@ jobs:
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
 
-        # 🌟 Kotlin Version 1.9.24 သို့ တိကျစွာ သတ်မှတ်ခြင်း
         if [ -f "android/settings.gradle" ]; then
           sed -i 's/org.jetbrains.kotlin.android" version "[^"]*"/org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle
         fi
@@ -207,12 +205,23 @@ jobs:
           dart run flutter_launcher_icons
         fi
 
-    - name: Decode Persistent Release Keystore & Configure Signing
+    - name: Ensure Persistent Release Keystore & Configure Signing
       run: |
-        # 🌟 GitHub Secret မှ Keystore ဖိုင်ကို ပြန်လည်ဖော်ထုတ်ခြင်း
-        echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > android/app/dataplus.jks
+        if [ ! -f "dataplus.jks" ]; then
+          echo "Generating new persistent release keystore..."
+          keytool -genkey -v -keystore dataplus.jks -alias dataplus -keyalg RSA -keysize 2048 -validity 10000 -storepass dataplus123 -keypass dataplus123 -dname "CN=DataPlus, OU=App, O=DataPlus, L=Yangon, C=MM"
+          
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add dataplus.jks
+          git commit -m "chore: persist release signing keystore [skip ci]" || true
+          git push || true
+        else
+          echo "Using existing persistent keystore from repository."
+        fi
+        
+        cp dataplus.jks android/app/dataplus.jks
 
-        # 🌟 v1SigningEnabled true နှင့် v2SigningEnabled true အပြည့်အစုံ ထည့်သွင်းခြင်း
         if ! grep -q "signingConfigs.release" android/app/build.gradle; then
           sed -i '/buildTypes {/i \    signingConfigs {\n        release {\n            storeFile file("dataplus.jks")\n            storePassword "dataplus123"\n            keyAlias "dataplus"\n            keyPassword "dataplus123"\n            v1SigningEnabled true\n            v2SigningEnabled true\n        }\n    }' android/app/build.gradle
           sed -i -E 's/signingConfig =? signingConfigs\.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
