@@ -17,6 +17,7 @@ dependencies:
   chewie: ^1.8.5
   package_info_plus: ^8.0.0
   shared_preferences: ^2.2.3
+  android_intent_plus: ^5.1.0
 
 dev_dependencies:
   flutter_test:
