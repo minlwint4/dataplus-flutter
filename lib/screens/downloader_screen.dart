@@ -273,7 +273,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ],
                 ),
 
-                // 🌟 USB Debugging / Developer Mode Shortcut ခလုတ် (About Phone သို့ တိုက်ရိုက်သွားမည့်စနစ်)
+                // 🌟 USB Debugging / Xiaomi My Device Shortcut ခလုတ်
                 const Divider(color: Color(0xFF30363D), height: 18),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -294,7 +294,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       onPressed: () async {
                         bool opened = false;
 
-                        // အဆင့် (၁) - Developer Options ပွင့်ပြီးသားဖြစ်ပါက တိုက်ရိုက်ဖွင့်မည်
+                        // ၁။ Developer Options ပွင့်ပြီးသား ဖြစ်ပါက တိုက်ရိုက်ဖွင့်မည်
                         try {
                           const intent = AndroidIntent(
                             action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS',
@@ -303,7 +303,20 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           opened = true;
                         } catch (_) {}
 
-                        // အဆင့် (၂) - မပွင့်သေးပါက "About Phone" တိုက်ရိုက် Intent ကို စမ်းဖွင့်မည်
+                        // ၂။ Xiaomi "My device" စာမျက်နှာဆီ တိုက်ရိုက် ခေါ်ယူရန် ကြိုးစားမည်
+                        if (!opened) {
+                          try {
+                            const intent = AndroidIntent(
+                              action: 'android.intent.action.MAIN',
+                              package: 'com.android.settings',
+                              componentName: 'com.android.settings.Settings\$MyDeviceInfoActivity',
+                            );
+                            await intent.launch();
+                            opened = true;
+                          } catch (_) {}
+                        }
+
+                        // ၃။ Android Device Info စံ Intent ဖြင့် ထပ်မံကြိုးစားမည်
                         if (!opened) {
                           try {
                             const intent = AndroidIntent(
@@ -314,21 +327,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           } catch (_) {}
                         }
 
-                        // အဆင့် (၃) - Xiaomi / Custom ROM Component ဖြင့် ထပ်မံကြိုးစားမည်
-                        if (!opened) {
-                          try {
-                            const intent = AndroidIntent(
-                              action: 'android.intent.action.MAIN',
-                              package: 'com.android.settings',
-                              componentName: 'com.android.settings.Settings\$DeviceInfoSettingsActivity',
-                            );
-                            await intent.launch();
-                            opened = true;
-                          } catch (_) {}
-                        }
-
-                        // အဆင့် (၄) - အထက်ပါနည်းများ မရသေးပါက Settings စာမျက်နှာကို ၁၀၀% မပျက်မကွက် ဖွင့်ပေးမည်
-                        // (Xiaomi တွင် Settings ဖွင့်လိုက်သည်နှင့် "About Phone" သည် နံပါတ် ၁ ထိပ်ဆုံးတွင် အသင့်ရှိပါသည်)
+                        // ၄။ အထက်ပါနည်းများ မရပါက Settings ပင်မစာမျက်နှာကို ၁၀၀% မပျက်မကွက် ဖွင့်ပေးမည်
+                        // (Xiaomi Settings ပွင့်သည်နှင့် ထိပ်ဆုံးနံပါတ် ၁ တွင် "My device" အသင့်ရှိပါသည်)
                         if (!opened) {
                           try {
                             const intent = AndroidIntent(
@@ -339,16 +339,16 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           } catch (_) {}
                         }
 
-                        // အသုံးပြုသူ သိရှိစေရန် အသိပေးစာ ပြသခြင်း
+                        // 🌟 အသုံးပြုသူ သိရှိစေရန် အတိအကျ လမ်းညွှန်စာ ပြသခြင်း
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
-                                "ℹ️ 'About Phone' (ဖုန်းအကြောင်း) ထဲမှ 'Build number' သို့မဟုတ် OS Version ကို ၇ ချက် နှိပ်ပေးပါ",
+                                "ℹ️ 'My device' > 'Detailed info and specs' ထဲမှ 'OS version' (သို့) 'MIUI version' ကို ၇ ချက် နှိပ်ပေးပါ",
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white, fontSize: 12),
+                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                               ),
-                              duration: Duration(seconds: 5),
+                              duration: Duration(seconds: 6),
                               backgroundColor: Color(0xFF1E293B),
                             ),
                           );
