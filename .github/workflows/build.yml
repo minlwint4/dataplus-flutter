@@ -66,6 +66,12 @@ jobs:
         rm -rf android
         flutter create . --org com.dataplus --project-name dataplus_app
 
+        # 🌟 com.example လုံးဝမပါလာအောင် applicationId နှင့် namespace ကို အတိအကျ သတ်မှတ်ခြင်း
+        if [ -f "android/app/build.gradle" ]; then
+          sed -i 's/applicationId ".*"/applicationId "com.dataplus.dataplus_app"/g' android/app/build.gradle
+          sed -i 's/namespace ".*"/namespace "com.dataplus.dataplus_app"/g' android/app/build.gradle || true
+        fi
+
         mkdir -p android
         echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
         echo "flutter.buildMode=release" >> android/local.properties
