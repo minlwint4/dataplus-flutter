@@ -286,20 +286,81 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
       final mediaUrls = finalUrls.where((u) => !u.toLowerCase().endsWith('.apk')).toList();
 
-      // 🌟 ဒေါင်းလုဒ်ပြီးဆုံးချိန်မှ ဘောက်ချာပြသနိုင်ရန်အတွက် အချက်အလက်များကို Downloader သို့ မှတ်သားပေးပို့ခြင်း
       if (mediaUrls.isNotEmpty) {
         int mc = 0;
         int sc = 0;
+        String detectedCode = '';
+
         for (final u in mediaUrls) {
-          final decoded = Uri.decodeComponent(u).toUpperCase();
-          if (decoded.contains('SERIES')) {
+          bool isSeries = false;
+          final uri = Uri.tryParse(u);
+
+          if (uri != null) {
+            if (detectedCode.isEmpty) {
+              detectedCode = uri.queryParameters['code'] ?? '';
+            }
+
+            // ၁။ Plaintext path ပါမပါ စစ်ဆေးခြင်း
+            final pathParam = uri.queryParameters['path'] ?? '';
+            if (pathParam.toUpperCase().contains('SERIES')) {
+              isSeries = true;
+            }
+
+            // ၂။ 🌟 Base64 decode ဖြင့် ဝှက်ထားသော 'f' သို့မဟုတ် 'ref' parameter ထဲမှ SERIES ကို စစ်ဆေးခြင်း
+            final fParam = uri.queryParameters['f'] ?? uri.queryParameters['ref'] ?? '';
+            if (!isSeries && fParam.isNotEmpty) {
+              try {
+                String norm = fParam.replaceAll('-', '+').replaceAll('_', '/');
+                while (norm.length % 4 != 0) {
+                  norm += '=';
+                }
+                final decodedBytes = base64Decode(norm);
+                final decodedPath = utf8.decode(decodedBytes, allowMalformed: true).toUpperCase();
+                if (decodedPath.contains('SERIES')) {
+                  isSeries = true;
+                }
+              } catch (_) {}
+            }
+
+            // ၃။ Full URL decode ဖြင့် နောက်ဆုံး စစ်ဆေးခြင်း
+            if (!isSeries) {
+              final fullDecoded = Uri.decodeComponent(u).toUpperCase();
+              if (fullDecoded.contains('SERIES')) {
+                isSeries = true;
+              }
+            }
+          }
+
+          if (isSeries) {
             sc++;
           } else {
             mc++;
           }
         }
 
-        final custName = await _getSavedUserName() ?? 'Customer';
+        String custName = await _getSavedUserName() ?? 'Customer';
+
+        // ၄။ 🌟 အကယ်၍ Code ပါလာပါက ဆာဗာရှိ Cart File မှ အတိအကျ စစ်ဆေးခြင်း (Double Verification)
+        if (detectedCode.isNotEmpty) {
+          try {
+            final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1500);
+            final req = await client.getUrl(Uri.parse('$_activeBaseUrl/api/download/code_info/$detectedCode'));
+            final resp = await req.close();
+            if (resp.statusCode == HttpStatus.ok) {
+              final body = await resp.transform(utf8.decoder).join();
+              final data = jsonDecode(body);
+              if (data['summary'] != null) {
+                mc = data['summary']['movies_count'] ?? mc;
+                sc = data['summary']['series_count'] ?? sc;
+              }
+              if (data['customer'] != null && (data['customer'] as String).isNotEmpty) {
+                custName = data['customer'];
+              }
+            }
+            client.close();
+          } catch (_) {}
+        }
+
         DownloaderScreen.setPendingVoucher(
           customerName: custName,
           movieCount: mc,
@@ -307,7 +368,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
         );
       }
 
-      // ⚡ Downloader Screen (Tab 1) သို့ ကူးပြောင်းမည်
       widget.onTabChangeRequested?.call(1);
     }
   }
