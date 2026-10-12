@@ -18,7 +18,6 @@ dependencies:
   package_info_plus: ^8.0.0
   shared_preferences: ^2.2.3
   android_intent_plus: ^5.1.0
-  audioplayers: ^6.0.0 # 🌟 ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံဖိုင်များ ဖွင့်ရန် ထည့်သွင်းထားသည်
 
 dev_dependencies:
   flutter_test:
