@@ -95,7 +95,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     });
   }
 
-  // 🔊 VideoPlayer Engine ကိုသုံး၍ Server ပေါ်မှ Wav ဖိုင်များကို ဖုန်းစပီကာဖြင့် အစဉ်လိုက် ဖွင့်ပေးခြင်း
+  // 🔊 VideoPlayer Engine ဖြင့် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံဖိုင်များ ဖွင့်ခြင်း
   Future<void> _playPhoneVoiceSequence(String serverUrl, int totalPrice) async {
     try {
       final client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
@@ -124,7 +124,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             final dur = controller.value.duration;
             final startTime = DateTime.now();
             
-            // အသံဖိုင် ပြီးဆုံးသည်အထိ စောင့်ဆိုင်းခြင်း
             while (controller.value.isPlaying &&
                 DateTime.now().difference(startTime) < dur + const Duration(milliseconds: 400)) {
               if (!_isVoucherShowing || !mounted) break;
@@ -154,6 +153,45 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     } catch (_) {}
   }
 
+  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function
+  Future<void> _sendPrintJob(BuildContext ctx, String serverUrl, String customer, int mc, int sc) async {
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
+      final req = await client.postUrl(Uri.parse('$serverUrl/api/voucher/print'));
+      req.headers.set('Content-Type', 'application/json');
+      req.add(utf8.encode(jsonEncode({
+        'customer': customer,
+        'movie_count': mc,
+        'series_count': sc,
+      })));
+      final resp = await req.close();
+      client.close();
+
+      if (resp.statusCode == HttpStatus.ok) {
+        if (ctx.mounted) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(
+              content: Text("✅ ဘောက်ချာ ပရင့်ထုတ်ပြီးပါပြီ"),
+              backgroundColor: Color(0xFF238636),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        throw Exception();
+      }
+    } catch (_) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(
+            content: Text("⚠️ ပရင့်စက်သို့ ချိတ်ဆက်မရပါ (192.168.1.77 ကို စစ်ဆေးပါ)"),
+            backgroundColor: Color(0xFFB91C1C),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _showVoucherDialog({
     required String customerName,
     required int movieCount,
@@ -177,7 +215,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final int grandTotal = movieTotal + seriesTotal;
     final String nowStr = DateTime.now().toString().substring(0, 16);
 
-    // 🌟 ဘောက်ချာ စတင်ပေါ်ချိန်တွင် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံထွက်စေခြင်း
+    // 🌟 ဘောက်ချာပေါ်ချိန်တွင် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံထွက်စေခြင်း
     _playPhoneVoiceSequence(serverUrl, grandTotal);
 
     await showDialog(
@@ -255,23 +293,46 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF238636),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          Row(
+            children: [
+              // 🖨️ Print ခလုတ်
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1F6FEB),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  onPressed: () {
+                    _sendPrintJob(context, serverUrl, customerName, movieCount, seriesCount);
+                  },
+                  icon: const Icon(Icons.print, size: 16, color: Colors.white),
+                  label: const Text(
+                    "Print ထုတ်မည်",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
               ),
-              onPressed: () {
-                _stopVoicePlayback();
-                Navigator.pop(ctx);
-              },
-              child: const Text(
-                "OK (ပိတ်မည်)",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              const SizedBox(width: 8),
+              // OK (ပိတ်မည်) ခလုတ်
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF238636),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  onPressed: () {
+                    _stopVoicePlayback();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text(
+                    "OK (ပိတ်မည်)",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -703,7 +764,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             title: Row(
               children: [
                 const Icon(Icons.delete_forever, color: Color(0xFFF85149), size: 26),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
