@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/download_engine.dart';
+import 'downloader_screen.dart';
 
 class WebPortalScreen extends StatefulWidget {
   final Function(int)? onTabChangeRequested;
@@ -22,7 +23,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   bool _isConnectionError = false;
   DateTime? _lastBackPressTime;
 
-  // 🌐 ချိတ်ဆက်စမ်းသပ်မည့် ဆာဗာ IP (၂) ခု
   static const List<String> _servers = [
     'http://10.10.10.10:1000',
     'http://192.168.1.50:1000',
@@ -38,7 +38,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _connectToFastestServer();
   }
 
-  // ⚡ IP နှစ်ခုစလုံးကို တစ်ပြိုင်နက်လှမ်းခေါ်ပြီး အရင်ဆုံး မိသည့် IP ကို ရွေးချယ်ချိတ်ဆက်ခြင်း
   Future<void> _connectToFastestServer() async {
     setState(() {
       _isLoading = true;
@@ -63,13 +62,11 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           failedCount++;
         }
         if (failedCount >= _servers.length && !completer.isCompleted) {
-          // နှစ်ခုစလုံး ချက်ချင်း မမိပါက မူရင်း 10.10.10.10 ကို Default ထားမည်
           completer.complete(_servers.first);
         }
       }();
     }
 
-    // ၁.၅ စက္ကန့်အတွင်း မည်သည့် IP မှ မတက်လာပါက Safeguard
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (!completer.isCompleted) {
         completer.complete(_servers.first);
@@ -136,7 +133,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
             return NavigationDecision.navigate;
           },
           onWebResourceError: (WebResourceError error) {
-            // စာမျက်နှာဖွင့်မရပါက Retry Screen ပြသရန်
             if (error.isForMainFrame ?? true) {
               setState(() {
                 _isLoading = false;
@@ -154,7 +150,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               setState(() => _isLoading = false);
             }
 
-            // လက်ရှိ မိနေသော Server Host URL အတိုင်း အချက်အလက်ပို့ခြင်း
             final currentUri = Uri.tryParse(url);
             if (currentUri != null && currentUri.host.isNotEmpty) {
               _activeBaseUrl = '${currentUri.scheme}://${currentUri.host}:${currentUri.port}';
@@ -254,7 +249,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
       );
   }
 
-  void _processIncomingDownloadLinks(String payload) {
+  Future<void> _processIncomingDownloadLinks(String payload) async {
     if (payload.trim().isEmpty) return;
 
     List<String> rawUrls = [];
@@ -271,13 +266,11 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           .toList();
     }
 
-    // ⚡ 10.10.10.10 သို့မဟုတ် 192.168.1.50 မည်သည့်လင့်ခ်ပါလာပါစေ လက်ရှိ မိနေသည့် _activeBaseUrl သို့ အလိုအလျောက် ပြောင်းပေးခြင်း
     List<String> finalUrls = rawUrls.map((u) {
       String link = u;
       if (!link.startsWith('http')) {
         link = link.startsWith('/') ? '$_activeBaseUrl$link' : '$_activeBaseUrl/$link';
       } else {
-        // IP တစ်ခုခု ပါလာပါက လက်ရှိမိနေသော IP သို့ ညှိပေးခြင်း
         for (final server in _servers) {
           if (link.startsWith(server)) {
             link = link.replaceFirst(server, _activeBaseUrl);
@@ -290,6 +283,31 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
     if (finalUrls.isNotEmpty) {
       _engine.addUrls(finalUrls);
+
+      final mediaUrls = finalUrls.where((u) => !u.toLowerCase().endsWith('.apk')).toList();
+
+      // 🌟 ဒေါင်းလုဒ်ပြီးဆုံးချိန်မှ ဘောက်ချာပြသနိုင်ရန်အတွက် အချက်အလက်များကို Downloader သို့ မှတ်သားပေးပို့ခြင်း
+      if (mediaUrls.isNotEmpty) {
+        int mc = 0;
+        int sc = 0;
+        for (final u in mediaUrls) {
+          final decoded = Uri.decodeComponent(u).toUpperCase();
+          if (decoded.contains('SERIES')) {
+            sc++;
+          } else {
+            mc++;
+          }
+        }
+
+        final custName = await _getSavedUserName() ?? 'Customer';
+        DownloaderScreen.setPendingVoucher(
+          customerName: custName,
+          movieCount: mc,
+          seriesCount: sc,
+        );
+      }
+
+      // ⚡ Downloader Screen (Tab 1) သို့ ကူးပြောင်းမည်
       widget.onTabChangeRequested?.call(1);
     }
   }
@@ -391,7 +409,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                 const Center(
                   child: CircularProgressIndicator(color: Color(0xFF00E676)),
                 ),
-              // ⚠️ Wi-Fi မမိသေးပါက ပြသမည့် Retry Button
               if (_isConnectionError && !_isLoading)
                 Center(
                   child: Container(
