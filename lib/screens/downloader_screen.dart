@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:video_player/video_player.dart';
 import '../services/download_engine.dart';
 import '../main.dart'; 
 
@@ -42,7 +42,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
   bool _wasDownloading = false;
   bool _isVoucherShowing = false;
-  AudioPlayer? _voicePlayer;
+  VideoPlayerController? _voiceController;
 
   @override
   void initState() {
@@ -78,7 +78,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   void _triggerVoucherAndVoice() {
     if (!DownloaderScreen.hasPendingVoucher || _isVoucherShowing) return;
 
-    // ⚡ ဒေါင်းလုဒ်ပြီးသည်နှင့် ချက်ချင်း (0.5 စက္ကန့်အကြာတွင်) ဘောက်ချာပြပြီး ဖုန်းမှ အသံထွက်မည်
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted || !DownloaderScreen.hasPendingVoucher || _isVoucherShowing) return;
 
@@ -91,14 +90,12 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       ).then((_) {
         _isVoucherShowing = false;
         DownloaderScreen.hasPendingVoucher = false;
-        _voicePlayer?.stop();
-        _voicePlayer?.dispose();
-        _voicePlayer = null;
+        _stopVoicePlayback();
       });
     });
   }
 
-  // 🔊 ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံဖိုင်များကို အစဉ်လိုက် ဖွင့်ပေးမည့် Function
+  // 🔊 VideoPlayer Engine ကိုသုံး၍ Server ပေါ်မှ Wav ဖိုင်များကို ဖုန်းစပီကာဖြင့် အစဉ်လိုက် ဖွင့်ပေးခြင်း
   Future<void> _playPhoneVoiceSequence(String serverUrl, int totalPrice) async {
     try {
       final client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
@@ -108,32 +105,51 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         final body = await resp.transform(utf8.decoder).join();
         final data = jsonDecode(body);
         final List<dynamic> files = data['files'] ?? [];
-
         client.close();
 
         if (files.isEmpty || !mounted) return;
 
-        _voicePlayer?.stop();
-        _voicePlayer?.dispose();
-        _voicePlayer = AudioPlayer();
+        await _stopVoicePlayback();
 
         for (final relativeUrl in files) {
           if (!_isVoucherShowing || !mounted) break;
           final fullUrl = '$serverUrl$relativeUrl';
-          final completer = Completer<void>();
-          late StreamSubscription sub;
 
-          sub = _voicePlayer!.onPlayerComplete.listen((_) {
-            sub.cancel();
-            if (!completer.isCompleted) completer.complete();
-          });
+          try {
+            final controller = VideoPlayerController.networkUrl(Uri.parse(fullUrl));
+            _voiceController = controller;
+            await controller.initialize();
+            await controller.play();
 
-          await _voicePlayer!.play(UrlSource(fullUrl));
-          await completer.future;
-          await Future.delayed(const Duration(milliseconds: 60));
+            final dur = controller.value.duration;
+            final startTime = DateTime.now();
+            
+            // အသံဖိုင် ပြီးဆုံးသည်အထိ စောင့်ဆိုင်းခြင်း
+            while (controller.value.isPlaying &&
+                DateTime.now().difference(startTime) < dur + const Duration(milliseconds: 400)) {
+              if (!_isVoucherShowing || !mounted) break;
+              await Future.delayed(const Duration(milliseconds: 50));
+            }
+
+            await controller.dispose();
+            if (_voiceController == controller) {
+              _voiceController = null;
+            }
+            await Future.delayed(const Duration(milliseconds: 50));
+          } catch (_) {}
         }
       } else {
         client.close();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _stopVoicePlayback() async {
+    try {
+      if (_voiceController != null) {
+        await _voiceController!.pause();
+        await _voiceController!.dispose();
+        _voiceController = null;
       }
     } catch (_) {}
   }
@@ -161,7 +177,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final int grandTotal = movieTotal + seriesTotal;
     final String nowStr = DateTime.now().toString().substring(0, 16);
 
-    // 🌟 ဘောက်ချာ စတင်ပေါ်သည်နှင့် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံထွက်စေခြင်း
+    // 🌟 ဘောက်ချာ စတင်ပေါ်ချိန်တွင် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံထွက်စေခြင်း
     _playPhoneVoiceSequence(serverUrl, grandTotal);
 
     await showDialog(
@@ -248,7 +264,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               ),
               onPressed: () {
-                _voicePlayer?.stop();
+                _stopVoicePlayback();
                 Navigator.pop(ctx);
               },
               child: const Text(
@@ -308,8 +324,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
   @override
   void dispose() {
-    _voicePlayer?.stop();
-    _voicePlayer?.dispose();
+    _stopVoicePlayback();
     engine.removeListener(_handleEngineStateChange);
     engine.activeTab.removeListener(_handleTabChange);
     SystemChrome.setPreferredOrientations([
