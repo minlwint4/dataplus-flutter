@@ -291,6 +291,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
         int sc = 0;
         String detectedCode = '';
 
+        // ၁။ URL များထဲမှ code သို့မဟုတ် series/movie စစ်ဆေးခြင်း
         for (final u in mediaUrls) {
           bool isSeries = false;
           final uri = Uri.tryParse(u);
@@ -300,13 +301,12 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               detectedCode = uri.queryParameters['code'] ?? '';
             }
 
-            // ၁။ Plaintext path ပါမပါ စစ်ဆေးခြင်း
             final pathParam = uri.queryParameters['path'] ?? '';
             if (pathParam.toUpperCase().contains('SERIES')) {
               isSeries = true;
             }
 
-            // ၂။ 🌟 Base64 decode ဖြင့် ဝှက်ထားသော 'f' သို့မဟုတ် 'ref' parameter ထဲမှ SERIES ကို စစ်ဆေးခြင်း
+            // 🌟 Base64 decode ဖြင့် ဝှက်ထားသော 'f' သို့မဟုတ် 'ref' parameter ထဲမှ SERIES ကို စစ်ဆေးခြင်း
             final fParam = uri.queryParameters['f'] ?? uri.queryParameters['ref'] ?? '';
             if (!isSeries && fParam.isNotEmpty) {
               try {
@@ -322,7 +322,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               } catch (_) {}
             }
 
-            // ၃။ Full URL decode ဖြင့် နောက်ဆုံး စစ်ဆေးခြင်း
             if (!isSeries) {
               final fullDecoded = Uri.decodeComponent(u).toUpperCase();
               if (fullDecoded.contains('SERIES')) {
@@ -338,9 +337,20 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           }
         }
 
+        // ၂။ လက်ရှိ WebView URL ထဲမှ Code ရှာဖွေခြင်း (ဥပမာ: /download/2345)
+        try {
+          final currentWebUrl = await _controller.currentUrl() ?? '';
+          if (detectedCode.isEmpty) {
+            final webMatch = RegExp(r'/download/([a-zA-Z0-9]+)').firstMatch(currentWebUrl);
+            if (webMatch != null) {
+              detectedCode = webMatch.group(1) ?? '';
+            }
+          }
+        } catch (_) {}
+
         String custName = await _getSavedUserName() ?? 'Customer';
 
-        // ၄။ 🌟 အကယ်၍ Code ပါလာပါက ဆာဗာရှိ Cart File မှ အတိအကျ စစ်ဆေးခြင်း (Double Verification)
+        // ၃။ 🌟 ဆာဗာရှိ Cart File မှ အတိအကျ စစ်ဆေးရယူခြင်း (Double Verification)
         if (detectedCode.isNotEmpty) {
           try {
             final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1500);
@@ -361,10 +371,12 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           } catch (_) {}
         }
 
+        // ၄။ 🌟 Downloader သို့ serverUrl ပါ တစ်ပါတည်း လွှဲပြောင်းပေးခြင်း
         DownloaderScreen.setPendingVoucher(
           customerName: custName,
           movieCount: mc,
           seriesCount: sc,
+          serverUrl: _activeBaseUrl,
         );
       }
 
