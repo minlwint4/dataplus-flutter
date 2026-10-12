@@ -1,29 +1,34 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../services/download_engine.dart';
 import '../main.dart'; 
 
 class DownloaderScreen extends StatefulWidget {
   const DownloaderScreen({super.key});
 
-  // 🌟 ဒေါင်းလုဒ်ပြီးဆုံးချိန်မှ ဘောက်ချာပြသမည့် Data များ
   static String? pendingCustomerName;
   static int pendingMovieCount = 0;
   static int pendingSeriesCount = 0;
+  static String pendingServerUrl = 'http://10.10.10.10:1000';
   static bool hasPendingVoucher = false;
 
   static void setPendingVoucher({
     required String customerName,
     required int movieCount,
     required int seriesCount,
+    required String serverUrl,
   }) {
     pendingCustomerName = customerName;
     pendingMovieCount = movieCount;
     pendingSeriesCount = seriesCount;
+    pendingServerUrl = serverUrl;
     hasPendingVoucher = true;
   }
 
@@ -37,6 +42,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
   bool _wasDownloading = false;
   bool _isVoucherShowing = false;
+  AudioPlayer? _voicePlayer;
 
   @override
   void initState() {
@@ -56,7 +62,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  // 🌟 ဒေါင်းလုဒ်အခြေအနေကို စောင့်ကြည့်ပြီး အားလုံးပြီးဆုံးပါက ဘောက်ချာခေါ်မည့် Listener
   void _handleEngineStateChange() {
     final bool isDownloading = engine.downloads.any((d) => d.status == 'downloading' || engine.isDownloading);
     final int qCount = engine.downloads.where((d) => d.status != 'finished').length;
@@ -65,17 +70,16 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     if (isDownloading) {
       _wasDownloading = true;
     } else if (_wasDownloading && qCount == 0 && fCount > 0) {
-      // ⚡ ဒေါင်းလုဒ်များ အားလုံး ၁၀၀% ပြီးဆုံးသွားသည့် အခိုက်အတန့်
       _wasDownloading = false;
-      _triggerVoucherAfterAudioDelay();
+      _triggerVoucherAndVoice();
     }
   }
 
-  void _triggerVoucherAfterAudioDelay() {
+  void _triggerVoucherAndVoice() {
     if (!DownloaderScreen.hasPendingVoucher || _isVoucherShowing) return;
 
-    // 🔊 PC ဆာဗာမှ complete အသံနှင့် ကျသင့်ငွေ အသံထွက်ဆိုပြီးသည်အထိ (၄ စက္ကန့်ခန့်) စောင့်ပြီးမှ Voucher ပေါ်စေခြင်း
-    Future.delayed(const Duration(seconds: 4), () {
+    // ⚡ ဒေါင်းလုဒ်ပြီးသည်နှင့် ချက်ချင်း (0.5 စက္ကန့်အကြာတွင်) ဘောက်ချာပြပြီး ဖုန်းမှ အသံထွက်မည်
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted || !DownloaderScreen.hasPendingVoucher || _isVoucherShowing) return;
 
       _isVoucherShowing = true;
@@ -83,19 +87,63 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         customerName: DownloaderScreen.pendingCustomerName ?? 'Customer',
         movieCount: DownloaderScreen.pendingMovieCount,
         seriesCount: DownloaderScreen.pendingSeriesCount,
+        serverUrl: DownloaderScreen.pendingServerUrl,
       ).then((_) {
         _isVoucherShowing = false;
         DownloaderScreen.hasPendingVoucher = false;
+        _voicePlayer?.stop();
+        _voicePlayer?.dispose();
+        _voicePlayer = null;
       });
     });
+  }
+
+  // 🔊 ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံဖိုင်များကို အစဉ်လိုက် ဖွင့်ပေးမည့် Function
+  Future<void> _playPhoneVoiceSequence(String serverUrl, int totalPrice) async {
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
+      final req = await client.getUrl(Uri.parse('$serverUrl/api/voice/price_files?price=$totalPrice'));
+      final resp = await req.close();
+      if (resp.statusCode == HttpStatus.ok) {
+        final body = await resp.transform(utf8.decoder).join();
+        final data = jsonDecode(body);
+        final List<dynamic> files = data['files'] ?? [];
+
+        client.close();
+
+        if (files.isEmpty || !mounted) return;
+
+        _voicePlayer?.stop();
+        _voicePlayer?.dispose();
+        _voicePlayer = AudioPlayer();
+
+        for (final relativeUrl in files) {
+          if (!_isVoucherShowing || !mounted) break;
+          final fullUrl = '$serverUrl$relativeUrl';
+          final completer = Completer<void>();
+          late StreamSubscription sub;
+
+          sub = _voicePlayer!.onPlayerComplete.listen((_) {
+            sub.cancel();
+            if (!completer.isCompleted) completer.complete();
+          });
+
+          await _voicePlayer!.play(UrlSource(fullUrl));
+          await completer.future;
+          await Future.delayed(const Duration(milliseconds: 60));
+        }
+      } else {
+        client.close();
+      }
+    } catch (_) {}
   }
 
   Future<void> _showVoucherDialog({
     required String customerName,
     required int movieCount,
     required int seriesCount,
+    required String serverUrl,
   }) async {
-    // Movies တွက်ချက်မှု (၄ ကား = ၁၀၀၀၊ ပိုတာ ၃၀၀)
     final int mBundles = movieCount ~/ 4;
     final int mBundleCount = mBundles * 4;
     final int mBundlePrice = mBundles * 1000;
@@ -103,7 +151,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final int mRemPrice = mRemCount * 300;
     final int movieTotal = mBundlePrice + mRemPrice;
 
-    // Series တွက်ချက်မှု (၁၀ ကား = ၁၂၀၀၊ ပိုတာ ၁၅၀)
     final int sBundles = seriesCount ~/ 10;
     final int sBundleCount = sBundles * 10;
     final int sBundlePrice = sBundles * 1200;
@@ -113,6 +160,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
     final int grandTotal = movieTotal + seriesTotal;
     final String nowStr = DateTime.now().toString().substring(0, 16);
+
+    // 🌟 ဘောက်ချာ စတင်ပေါ်သည်နှင့် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံထွက်စေခြင်း
+    _playPhoneVoiceSequence(serverUrl, grandTotal);
 
     await showDialog(
       context: context,
@@ -155,7 +205,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
               ),
               const SizedBox(height: 12),
 
-              // MOVIES BREAKDOWN
               if (movieCount > 0) ...[
                 Text(
                   "MOVIES ($movieCount)",
@@ -169,7 +218,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 const SizedBox(height: 10),
               ],
 
-              // SERIES BREAKDOWN
               if (seriesCount > 0) ...[
                 Text(
                   "SERIES ($seriesCount)",
@@ -185,7 +233,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
               const Divider(color: Color(0xFF30363D), height: 16),
 
-              // TOTAL ROW
               _buildVoucherRow("TOTAL", "$grandTotal Ks", isTotal: true),
             ],
           ),
@@ -200,9 +247,12 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               ),
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () {
+                _voicePlayer?.stop();
+                Navigator.pop(ctx);
+              },
               child: const Text(
-                "OK (သိမ်းဆည်းမည်)",
+                "OK (ပိတ်မည်)",
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
@@ -258,6 +308,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
   @override
   void dispose() {
+    _voicePlayer?.stop();
+    _voicePlayer?.dispose();
     engine.removeListener(_handleEngineStateChange);
     engine.activeTab.removeListener(_handleTabChange);
     SystemChrome.setPreferredOrientations([
@@ -636,7 +688,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             title: Row(
               children: [
                 const Icon(Icons.delete_forever, color: Color(0xFFF85149), size: 26),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
