@@ -98,47 +98,63 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   // 🔊 VideoPlayer Engine ဖြင့် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံဖိုင်များ ဖွင့်ခြင်း
   Future<void> _playPhoneVoiceSequence(String serverUrl, int totalPrice) async {
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
-      final req = await client.getUrl(Uri.parse('$serverUrl/api/voice/price_files?price=$totalPrice'));
-      final resp = await req.close();
-      if (resp.statusCode == HttpStatus.ok) {
-        final body = await resp.transform(utf8.decoder).join();
-        final data = jsonDecode(body);
-        final List<dynamic> files = data['files'] ?? [];
-        client.close();
+      final List<String> targetServers = [
+        serverUrl,
+        'http://10.10.10.10:1000',
+        'http://192.168.1.50:1000',
+      ].toSet().toList();
 
-        if (files.isEmpty || !mounted) return;
+      List<dynamic> files = [];
+      String workingServer = serverUrl;
 
-        await _stopVoicePlayback();
+      for (final srv in targetServers) {
+        if (srv.isEmpty) continue;
+        try {
+          final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1500);
+          final req = await client.getUrl(Uri.parse('$srv/api/voice/price_files?price=$totalPrice'));
+          final resp = await req.close();
+          if (resp.statusCode == HttpStatus.ok) {
+            final body = await resp.transform(utf8.decoder).join();
+            final data = jsonDecode(body);
+            files = data['files'] ?? [];
+            workingServer = srv;
+            client.close();
+            if (files.isNotEmpty) break;
+          } else {
+            client.close();
+          }
+        } catch (_) {}
+      }
 
-        for (final relativeUrl in files) {
-          if (!_isVoucherShowing || !mounted) break;
-          final fullUrl = '$serverUrl$relativeUrl';
+      if (files.isEmpty || !mounted) return;
 
-          try {
-            final controller = VideoPlayerController.networkUrl(Uri.parse(fullUrl));
-            _voiceController = controller;
-            await controller.initialize();
-            await controller.play();
+      await _stopVoicePlayback();
 
-            final dur = controller.value.duration;
-            final startTime = DateTime.now();
-            
-            while (controller.value.isPlaying &&
-                DateTime.now().difference(startTime) < dur + const Duration(milliseconds: 400)) {
-              if (!_isVoucherShowing || !mounted) break;
-              await Future.delayed(const Duration(milliseconds: 50));
-            }
+      for (final relativeUrl in files) {
+        if (!_isVoucherShowing || !mounted) break;
+        final fullUrl = '$workingServer$relativeUrl';
 
-            await controller.dispose();
-            if (_voiceController == controller) {
-              _voiceController = null;
-            }
+        try {
+          final controller = VideoPlayerController.networkUrl(Uri.parse(fullUrl));
+          _voiceController = controller;
+          await controller.initialize();
+          await controller.play();
+
+          final dur = controller.value.duration;
+          final startTime = DateTime.now();
+
+          while (controller.value.isPlaying &&
+              DateTime.now().difference(startTime) < dur + const Duration(milliseconds: 400)) {
+            if (!_isVoucherShowing || !mounted) break;
             await Future.delayed(const Duration(milliseconds: 50));
-          } catch (_) {}
-        }
-      } else {
-        client.close();
+          }
+
+          await controller.dispose();
+          if (_voiceController == controller) {
+            _voiceController = null;
+          }
+          await Future.delayed(const Duration(milliseconds: 50));
+        } catch (_) {}
       }
     } catch (_) {}
   }
@@ -153,42 +169,61 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     } catch (_) {}
   }
 
-  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function
+  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function (10.10.10.10 ရော 192.168.1.50 ပါ Auto စမ်းသပ်စနစ်)
   Future<void> _sendPrintJob(BuildContext ctx, String serverUrl, String customer, int mc, int sc) async {
-    try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
-      final req = await client.postUrl(Uri.parse('$serverUrl/api/voucher/print'));
-      req.headers.set('Content-Type', 'application/json');
-      req.add(utf8.encode(jsonEncode({
-        'customer': customer,
-        'movie_count': mc,
-        'series_count': sc,
-      })));
-      final resp = await req.close();
-      client.close();
+    final List<String> targetServers = [
+      serverUrl,
+      'http://10.10.10.10:1000',
+      'http://192.168.1.50:1000',
+    ].toSet().toList();
 
-      if (resp.statusCode == HttpStatus.ok) {
-        if (ctx.mounted) {
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            const SnackBar(
-              content: Text("✅ ဘောက်ချာ ပရင့်ထုတ်ပြီးပါပြီ"),
-              backgroundColor: Color(0xFF238636),
-              duration: Duration(seconds: 2),
-            ),
-          );
+    bool printSuccess = false;
+    String lastError = "ဆာဗာသို့ ချိတ်ဆက်မရပါ";
+
+    for (final target in targetServers) {
+      if (target.isEmpty) continue;
+      try {
+        final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 2000);
+        final req = await client.postUrl(Uri.parse('$target/api/voucher/print'));
+        req.headers.set('Content-Type', 'application/json');
+        req.add(utf8.encode(jsonEncode({
+          'customer': customer,
+          'movie_count': mc,
+          'series_count': sc,
+        })));
+        final resp = await req.close();
+        final respBody = await resp.transform(utf8.decoder).join();
+        client.close();
+
+        if (resp.statusCode == HttpStatus.ok) {
+          printSuccess = true;
+          break;
+        } else {
+          lastError = "Server ($target): HTTP ${resp.statusCode} - $respBody";
         }
-      } else {
-        throw Exception();
+      } catch (e) {
+        lastError = "ချိတ်ဆက်မှုမအောင်မြင်ပါ ($target): $e";
       }
-    } catch (_) {
-      if (ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
-            content: Text("⚠️ ပရင့်စက်သို့ ချိတ်ဆက်မရပါ (192.168.1.77 ကို စစ်ဆေးပါ)"),
-            backgroundColor: Color(0xFFB91C1C),
-          ),
-        );
-      }
+    }
+
+    if (!ctx.mounted) return;
+
+    if (printSuccess) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text("✅ ဘောက်ချာ ပရင့်ထုတ်ပြီးပါပြီ"),
+          backgroundColor: Color(0xFF238636),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(
+          content: Text("⚠️ $lastError"),
+          backgroundColor: const Color(0xFFB91C1C),
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -764,7 +799,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             title: Row(
               children: [
                 const Icon(Icons.delete_forever, color: Color(0xFFF85149), size: 26),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
