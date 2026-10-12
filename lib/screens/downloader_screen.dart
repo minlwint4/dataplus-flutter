@@ -10,6 +10,23 @@ import '../main.dart';
 class DownloaderScreen extends StatefulWidget {
   const DownloaderScreen({super.key});
 
+  // 🌟 ဒေါင်းလုဒ်ပြီးဆုံးချိန်မှ ဘောက်ချာပြသမည့် Data များ
+  static String? pendingCustomerName;
+  static int pendingMovieCount = 0;
+  static int pendingSeriesCount = 0;
+  static bool hasPendingVoucher = false;
+
+  static void setPendingVoucher({
+    required String customerName,
+    required int movieCount,
+    required int seriesCount,
+  }) {
+    pendingCustomerName = customerName;
+    pendingMovieCount = movieCount;
+    pendingSeriesCount = seriesCount;
+    hasPendingVoucher = true;
+  }
+
   @override
   State<DownloaderScreen> createState() => _DownloaderScreenState();
 }
@@ -18,11 +35,15 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   final engine = DownloadEngine();
   late String currentTab;
 
+  bool _wasDownloading = false;
+  bool _isVoucherShowing = false;
+
   @override
   void initState() {
     super.initState();
     currentTab = engine.activeTab.value;
     engine.activeTab.addListener(_handleTabChange);
+    engine.addListener(_handleEngineStateChange);
     _updateOrientations(currentTab);
   }
 
@@ -33,6 +54,191 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       });
       _updateOrientations(currentTab);
     }
+  }
+
+  // 🌟 ဒေါင်းလုဒ်အခြေအနေကို စောင့်ကြည့်ပြီး အားလုံးပြီးဆုံးပါက ဘောက်ချာခေါ်မည့် Listener
+  void _handleEngineStateChange() {
+    final bool isDownloading = engine.downloads.any((d) => d.status == 'downloading' || engine.isDownloading);
+    final int qCount = engine.downloads.where((d) => d.status != 'finished').length;
+    final int fCount = engine.downloads.where((d) => d.status == 'finished').length;
+
+    if (isDownloading) {
+      _wasDownloading = true;
+    } else if (_wasDownloading && qCount == 0 && fCount > 0) {
+      // ⚡ ဒေါင်းလုဒ်များ အားလုံး ၁၀၀% ပြီးဆုံးသွားသည့် အခိုက်အတန့်
+      _wasDownloading = false;
+      _triggerVoucherAfterAudioDelay();
+    }
+  }
+
+  void _triggerVoucherAfterAudioDelay() {
+    if (!DownloaderScreen.hasPendingVoucher || _isVoucherShowing) return;
+
+    // 🔊 PC ဆာဗာမှ complete အသံနှင့် ကျသင့်ငွေ အသံထွက်ဆိုပြီးသည်အထိ (၄ စက္ကန့်ခန့်) စောင့်ပြီးမှ Voucher ပေါ်စေခြင်း
+    Future.delayed(const Duration(seconds: 4), () {
+      if (!mounted || !DownloaderScreen.hasPendingVoucher || _isVoucherShowing) return;
+
+      _isVoucherShowing = true;
+      _showVoucherDialog(
+        customerName: DownloaderScreen.pendingCustomerName ?? 'Customer',
+        movieCount: DownloaderScreen.pendingMovieCount,
+        seriesCount: DownloaderScreen.pendingSeriesCount,
+      ).then((_) {
+        _isVoucherShowing = false;
+        DownloaderScreen.hasPendingVoucher = false;
+      });
+    });
+  }
+
+  Future<void> _showVoucherDialog({
+    required String customerName,
+    required int movieCount,
+    required int seriesCount,
+  }) async {
+    // Movies တွက်ချက်မှု (၄ ကား = ၁၀၀၀၊ ပိုတာ ၃၀၀)
+    final int mBundles = movieCount ~/ 4;
+    final int mBundleCount = mBundles * 4;
+    final int mBundlePrice = mBundles * 1000;
+    final int mRemCount = movieCount % 4;
+    final int mRemPrice = mRemCount * 300;
+    final int movieTotal = mBundlePrice + mRemPrice;
+
+    // Series တွက်ချက်မှု (၁၀ ကား = ၁၂၀၀၊ ပိုတာ ၁၅၀)
+    final int sBundles = seriesCount ~/ 10;
+    final int sBundleCount = sBundles * 10;
+    final int sBundlePrice = sBundles * 1200;
+    final int sRemCount = seriesCount % 10;
+    final int sRemPrice = sRemCount * 150;
+    final int seriesTotal = sBundlePrice + sRemPrice;
+
+    final int grandTotal = movieTotal + seriesTotal;
+    final String nowStr = DateTime.now().toString().substring(0, 16);
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E232B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+        contentPadding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        title: const Column(
+          children: [
+            Text(
+              "DATA PLUS",
+              style: TextStyle(
+                color: Color(0xFF00E676),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+            SizedBox(height: 3),
+            Text(
+              "ငွေရှင်းပြေစာ (Voucher)",
+              style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+            ),
+            Divider(color: Color(0xFF30363D), height: 16),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Customer: $customerName", style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                  Text(nowStr, style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // MOVIES BREAKDOWN
+              if (movieCount > 0) ...[
+                Text(
+                  "MOVIES ($movieCount)",
+                  style: const TextStyle(color: Color(0xFF58A6FF), fontSize: 12.5, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                if (mBundleCount > 0)
+                  _buildVoucherRow("$mBundleCount x 250", "$mBundlePrice"),
+                if (mRemCount > 0)
+                  _buildVoucherRow("$mRemCount x 300", "$mRemPrice"),
+                const SizedBox(height: 10),
+              ],
+
+              // SERIES BREAKDOWN
+              if (seriesCount > 0) ...[
+                Text(
+                  "SERIES ($seriesCount)",
+                  style: const TextStyle(color: Color(0xFF00E676), fontSize: 12.5, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                if (sBundleCount > 0)
+                  _buildVoucherRow("$sBundleCount x 120", "$sBundlePrice"),
+                if (sRemCount > 0)
+                  _buildVoucherRow("$sRemCount x 150", "$sRemPrice"),
+                const SizedBox(height: 10),
+              ],
+
+              const Divider(color: Color(0xFF30363D), height: 16),
+
+              // TOTAL ROW
+              _buildVoucherRow("TOTAL", "$grandTotal Ks", isTotal: true),
+            ],
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF238636),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                "OK (သိမ်းဆည်းမည်)",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVoucherRow(String left, String right, {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            left,
+            style: TextStyle(
+              color: isTotal ? Colors.white : const Color(0xFFC9D1D9),
+              fontSize: isTotal ? 14 : 12,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              fontFamily: 'monospace',
+            ),
+          ),
+          Text(
+            right,
+            style: TextStyle(
+              color: isTotal ? const Color(0xFF00E676) : Colors.white,
+              fontSize: isTotal ? 15 : 12,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _updateOrientations(String tab) {
@@ -52,6 +258,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 
   @override
   void dispose() {
+    engine.removeListener(_handleEngineStateChange);
     engine.activeTab.removeListener(_handleTabChange);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -66,7 +273,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // 🌟 Download Link များ Paste ချနိုင်မည့် Dialog
   Future<void> _showAddUrlDialog() async {
     final textController = TextEditingController();
     try {
@@ -144,14 +350,12 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           ],
         ),
         actions: [
-          // 🌟 စာသားများကို Clear လုပ်ပေးမည့် "ပယ်ဖျက်" ခလုတ်
           TextButton(
             onPressed: () {
               textController.clear();
             },
             child: const Text("ပယ်ဖျက်", style: TextStyle(color: Color(0xFF8B949E))),
           ),
-          // 🌟 Dialog ကို ပိတ်မည့် "ပိတ်မည်" ခလုတ်
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text("ပိတ်မည်", style: TextStyle(color: Color(0xFF8B949E))),
@@ -273,8 +477,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     )
                   ],
                 ),
-
-                // 🌟 USB Debugging / Xiaomi My Device အဆင့် (၂) ဆင့် ခလုတ်များ
                 const Divider(color: Color(0xFF30363D), height: 18),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,7 +493,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        // ခလုတ် ၁: My device သို့ တိုက်ရိုက်သွားရန် (အပြာရောင်)
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
@@ -302,7 +503,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                             ),
                             onPressed: () async {
                               bool opened = false;
-                              // ၁။ Xiaomi MyDeviceInfoActivity တိုက်ရိုက် စမ်းသပ်ဖွင့်မည်
                               try {
                                 const miuiIntent = AndroidIntent(
                                   action: 'android.intent.action.MAIN',
@@ -314,7 +514,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 opened = true;
                               } catch (_) {}
 
-                              // ၂။ Android စံ About Phone ဖွင့်မည်
                               if (!opened) {
                                 try {
                                   const infoIntent = AndroidIntent(
@@ -326,7 +525,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                 } catch (_) {}
                               }
 
-                              // ၃။ Settings ပင်မစာမျက်နှာကို ၁၀၀% မပျက်မကွက် ဖွင့်မည် (ထိပ်ဆုံးတွင် My device အသင့်ရှိသည်)
                               if (!opened) {
                                 try {
                                   const settingsIntent = AndroidIntent(
@@ -359,8 +557,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                           ),
                         ),
                         const SizedBox(width: 6),
-
-                        // ခလုတ် ၂: USB Debugging တိုက်ရိုက်ဖွင့်ရန် (အစိမ်းရောင်)
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
@@ -440,7 +636,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             title: Row(
               children: [
                 const Icon(Icons.delete_forever, color: Color(0xFFF85149), size: 26),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
@@ -573,7 +769,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // 1. Queue Tab တွင်သာ Storage Bar ပြသမည်
                 if (currentTab == 'Queue') ...[
                   Container(
                     margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
@@ -742,7 +937,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ],
 
-                // 2. Header with Select All & Bin Icon Clear All
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -807,7 +1001,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                 ),
 
-                // 3. List Items
                 Expanded(
                   child: currentList.isEmpty
                       ? Center(
@@ -946,7 +1139,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                         ),
                 ),
 
-                // 4. Bottom Action Bar (Settings + Queue + [+] + Finished)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   color: const Color(0xFF16222F),
@@ -961,7 +1153,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       Expanded(
                         child: Row(
                           children: [
-                            // Queue Tab
                             Expanded(
                               child: InkWell(
                                 onTap: () => engine.activeTab.value = 'Queue',
@@ -984,8 +1175,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                               ),
                             ),
                             const SizedBox(width: 6),
-
-                            // 🌟 အလယ်ရှိ Link Paste ချနိုင်မည့် (+) Button
                             InkWell(
                               onTap: _showAddUrlDialog,
                               borderRadius: BorderRadius.circular(18),
@@ -999,8 +1188,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                               ),
                             ),
                             const SizedBox(width: 6),
-
-                            // Finished Tab
                             Expanded(
                               child: InkWell(
                                 onTap: () => engine.activeTab.value = 'Finished',
