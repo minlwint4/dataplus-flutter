@@ -258,7 +258,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
-    // 🌟 App စတက်လာတာနဲ့ Local မှာ သိမ်းထားတဲ့ Username/Device ID ကို Server နဲ့ အလိုအလျောက် ပြန်ချိတ်မည်
+    // 🌟 App စတက်လာတာနဲ့ Persistent Device ID ဖြင့် Server နှင့် အလိုအလျောက် Sync ပြုလုပ်မည်
     _syncPersistentUser();
 
     Future.delayed(const Duration(milliseconds: 1500), () {
@@ -266,35 +266,80 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     });
   }
 
+  // 🌟 App ကို Uninstall/Reinstall လုပ်လည်း လုံးဝမပြောင်းလဲမည့် Persistent Device ID ဆွဲယူခြင်း
+  Future<String> _getPersistentDeviceId(SharedPreferences prefs) async {
+    String? deviceId = prefs.getString('device_id');
+
+    final backupDir = Directory('/storage/emulated/0/Download/.Dataplus');
+    final backupFile = File('${backupDir.path}/.device_id');
+
+    try {
+      if (deviceId == null || deviceId.isEmpty) {
+        if (await backupFile.exists()) {
+          final content = (await backupFile.readAsString()).trim();
+          if (content.isNotEmpty) {
+            deviceId = content;
+            await prefs.setString('device_id', deviceId);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // ပထမဆုံးအကြိမ် ဖြစ်ပါက Hardware Time အခြေပြု Unique ID ထုတ်မည်
+    if (deviceId == null || deviceId.isEmpty) {
+      final rand = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+      deviceId = 'dp_${rand}_${DateTime.now().millisecond}';
+      await prefs.setString('device_id', deviceId);
+    }
+
+    // Storage ထဲရှိ .device_id ဖိုင်ထဲ အမြဲတမ်း Mirror သိမ်းဆည်းထားမည်
+    try {
+      if (!await backupDir.exists()) {
+        await backupDir.create(recursive: true);
+      }
+      await backupFile.writeAsString(deviceId);
+    } catch (_) {}
+
+    return deviceId;
+  }
+
+  // 🌟 Server ပေါ်ရှိ devices.json နှင့် အလိုအလျောက် Sync လုပ်ပြီး Last Update အမည် ရယူခြင်း
   Future<void> _syncPersistentUser() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedName = prefs.getString('customer_name');
-      String? savedDeviceId = prefs.getString('device_id');
+      final deviceId = await _getPersistentDeviceId(prefs);
+      final localName = prefs.getString('customer_name') ?? '';
 
-      if (savedDeviceId == null || savedDeviceId.isEmpty) {
-        savedDeviceId = DateTime.now().millisecondsSinceEpoch.toString();
-        await prefs.setString('device_id', savedDeviceId);
-      }
+      final possibleIps = ['10.10.10.10', '192.168.1.50', 'localhost'];
+      for (var ip in possibleIps) {
+        HttpClient? client;
+        try {
+          client = HttpClient();
+          client.connectionTimeout = const Duration(seconds: 1);
+          final req = await client.postUrl(Uri.parse('http://$ip:1000/api/user/sync_device'));
+          req.headers.set('Content-Type', 'application/json');
+          req.add(utf8.encode(jsonEncode({
+            'device_id': deviceId,
+            'name': localName,
+          })));
+          final resp = await req.close();
 
-      if (savedName != null && savedName.isNotEmpty) {
-        final possibleIps = ['192.168.1.50', '10.10.10.10', 'localhost'];
-        for (var ip in possibleIps) {
-          HttpClient? client;
-          try {
-            client = HttpClient();
-            client.connectionTimeout = const Duration(seconds: 1);
-            final req = await client.postUrl(Uri.parse('http://$ip:1000/api/user/identify'));
-            req.headers.set('Content-Type', 'application/json');
-            req.add(utf8.encode(jsonEncode({'name': savedName, 'device_id': savedDeviceId})));
-            final resp = await req.close();
-            client.close();
-            if (resp.statusCode == 200) {
-              break;
+          if (resp.statusCode == 200) {
+            final body = await resp.transform(utf8.decoder).join();
+            final data = jsonDecode(body);
+            // Server က ပြန်ပို့ပေးသော နောက်ဆုံးအမည် (Last Update Name) အတိုင်း App တွင် သိမ်းခြင်း
+            if (data['success'] == true && data['name'] != null) {
+              final String serverName = data['name'].toString().trim();
+              if (serverName.isNotEmpty) {
+                await prefs.setString('customer_name', serverName);
+              }
             }
-          } catch (_) {
-            try { client?.close(); } catch (_) {}
+            client.close();
+            break;
           }
+          client.close();
+        } catch (_) {
+          try { client?.close(); } catch (_) {}
         }
       }
     } catch (_) {}
