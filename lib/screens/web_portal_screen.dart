@@ -30,8 +30,10 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   ];
   String _activeBaseUrl = 'http://10.10.10.10:1000';
 
+  // 🌟 Downloader မစစ်ဆေးသော ဘေးကင်းသည့် DataPlus ဖိုဒါ လမ်းကြောင်းများ
   static const String _userNameFilePath = '/storage/emulated/0/Download/DataPlus/user_name.txt';
-  static const String _deviceIdFilePath = '/storage/emulated/0/Download/.Dataplus/.device_id';
+  static const String _deviceIdFilePath = '/storage/emulated/0/Download/DataPlus/device_id.txt';
+  static const String _oldDeviceIdFilePath = '/storage/emulated/0/Download/.Dataplus/.device_id';
 
   @override
   void initState() {
@@ -82,34 +84,52 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _controller.loadRequest(Uri.parse('$_activeBaseUrl/'));
   }
 
-  // 🌟 Persistent Device ID ရယူခြင်း (App Uninstall လုပ်လည်း မပျောက်သော ID)
+  // 🌟 Persistent Device ID ရယူခြင်း (ဖိုင်ဟောင်းကို ဖျက်ပြီး DataPlus ဖိုဒါထဲ အသေပြောင်းသိမ်းခြင်း)
   Future<String> _getPersistentDeviceId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       String? deviceId = prefs.getString('device_id');
 
-      final backupFile = File(_deviceIdFilePath);
-      if (deviceId == null || deviceId.isEmpty) {
-        if (await backupFile.exists()) {
-          final content = (await backupFile.readAsString()).trim();
-          if (content.isNotEmpty) {
-            deviceId = content;
-            await prefs.setString('device_id', deviceId);
+      final safeDir = Directory('/storage/emulated/0/Download/DataPlus');
+      final safeFile = File(_deviceIdFilePath);
+      final oldFile = File(_oldDeviceIdFilePath);
+
+      try {
+        // ၁။ Downloader Finish ထဲ ပေါ်နေစေသော ဖိုင်ဟောင်းရှိပါက ID အရင်ယူပြီး ဖိုင်ဟောင်းကို ဖျက်ပစ်မည်
+        if (await oldFile.exists()) {
+          final oldContent = (await oldFile.readAsString()).trim();
+          if (oldContent.isNotEmpty && (deviceId == null || deviceId.isEmpty)) {
+            deviceId = oldContent;
+          }
+          try { await oldFile.delete(); } catch (_) {}
+        }
+
+        // ၂။ ဘေးကင်းသော ဖိုဒါထဲမှ ID စစ်ဆေးရယူခြင်း
+        if (deviceId == null || deviceId.isEmpty) {
+          if (await safeFile.exists()) {
+            final content = (await safeFile.readAsString()).trim();
+            if (content.isNotEmpty) {
+              deviceId = content;
+            }
           }
         }
-      }
+      } catch (_) {}
 
+      // ၃။ ID မရှိသေးပါက အသစ် ထုတ်ယူခြင်း
       if (deviceId == null || deviceId.isEmpty) {
         final rand = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
         deviceId = 'dp_${rand}_${DateTime.now().millisecond}';
-        await prefs.setString('device_id', deviceId);
       }
 
-      final backupDir = Directory('/storage/emulated/0/Download/.Dataplus');
-      if (!await backupDir.exists()) {
-        await backupDir.create(recursive: true);
-      }
-      await backupFile.writeAsString(deviceId);
+      // ၄။ SharedPreferences နှင့် Download/DataPlus/device_id.txt ထဲတွင် အသေသိမ်းခြင်း
+      await prefs.setString('device_id', deviceId);
+      try {
+        if (!await safeDir.exists()) {
+          await safeDir.create(recursive: true);
+        }
+        await safeFile.writeAsString(deviceId);
+      } catch (_) {}
+
       return deviceId;
     } catch (_) {
       return 'dp_fallback_${DateTime.now().millisecondsSinceEpoch}';
@@ -193,7 +213,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
             await _sendStorageToWeb();
 
-            // 🌟 Persistent Device ID နှင့် အမည်ကို WebView ထဲသို့ ထည့်သွင်းပေးခြင်း
+            // 🌟 ဘေးကင်းသော Persistent Device ID နှင့် အမည်ကို WebView ထဲသို့ Inject ပြုလုပ်ခြင်း
             final deviceId = await _getPersistentDeviceId();
             final savedName = await _getSavedUserName() ?? '';
 
@@ -210,7 +230,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                   }
                 }
 
-                if (sName && sName !== '') {
+                if (sName && sName !== '' && sName.toUpperCase() !== 'GUEST') {
                   var curName = localStorage.getItem('dp_user_name') || localStorage.getItem('customer_name');
                   if (!curName || curName === '' || curName === 'Customer') {
                     localStorage.setItem('dp_user_name', sName);
@@ -398,7 +418,9 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               }
               if (data['customer'] != null && (data['customer'] as String).isNotEmpty) {
                 custName = data['customer'];
-                _saveUserNamePermanently(custName);
+                if (custName.toUpperCase() != 'GUEST') {
+                  _saveUserNamePermanently(custName);
+                }
               }
             }
             client.close();
@@ -442,7 +464,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
   Future<void> _saveUserNamePermanently(String name) async {
     final cleanName = name.trim();
-    if (cleanName.isEmpty) return;
+    if (cleanName.isEmpty || cleanName.toUpperCase() == 'GUEST') return;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('customer_name', cleanName);
@@ -460,12 +482,12 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final pName = prefs.getString('customer_name')?.trim();
-      if (pName != null && pName.isNotEmpty) return pName;
+      if (pName != null && pName.isNotEmpty && pName.toUpperCase() != 'GUEST') return pName;
 
       final file = File(_userNameFilePath);
       if (await file.exists()) {
         final name = (await file.readAsString()).trim();
-        if (name.isNotEmpty) return name;
+        if (name.isNotEmpty && name.toUpperCase() != 'GUEST') return name;
       }
     } catch (_) {}
     return null;
