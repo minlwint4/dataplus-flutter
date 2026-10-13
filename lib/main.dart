@@ -258,7 +258,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
-    // 🌟 App စတက်လာတာနဲ့ Persistent Device ID ဖြင့် Server နှင့် အလိုအလျောက် Sync ပြုလုပ်မည်
     _syncPersistentUser();
 
     Future.delayed(const Duration(milliseconds: 1500), () {
@@ -266,44 +265,57 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     });
   }
 
-  // 🌟 App ကို Uninstall/Reinstall လုပ်လည်း လုံးဝမပြောင်းလဲမည့် Persistent Device ID ဆွဲယူခြင်း
+  // 🌟 Downloader Finish ထဲ မပေါ်မည့် ဘေးကင်းသော DataPlus ဖိုဒါထဲသို့ Device ID ပြောင်းရွှေ့သိမ်းဆည်းခြင်း
   Future<String> _getPersistentDeviceId(SharedPreferences prefs) async {
     String? deviceId = prefs.getString('device_id');
 
-    final backupDir = Directory('/storage/emulated/0/Download/.Dataplus');
-    final backupFile = File('${backupDir.path}/.device_id');
+    // 📁 ဘေးကင်းသော ဖိုဒါ (Downloader က မစစ်ဆေးသော နေရာ)
+    final safeDir = Directory('/storage/emulated/0/Download/DataPlus');
+    final safeFile = File('${safeDir.path}/device_id.txt');
+
+    // ❌ Downloader Finish ထဲ ပေါ်နေစေသော ဖိုင်ဟောင်း
+    final oldFile = File('/storage/emulated/0/Download/.Dataplus/.device_id');
 
     try {
+      // ၁။ ဖိုင်ဟောင်း ရှိနေပါက မူလ ID မပျောက်စေရန် အရင်ဆွဲယူပြီး ဖိုင်ဟောင်းကို ဖျက်ထုတ်ပစ်မည်
+      if (await oldFile.exists()) {
+        final oldContent = (await oldFile.readAsString()).trim();
+        if (oldContent.isNotEmpty && (deviceId == null || deviceId.isEmpty)) {
+          deviceId = oldContent;
+        }
+        try { await oldFile.delete(); } catch (_) {}
+      }
+
+      // ၂။ ဘေးကင်းသော ဖိုဒါထဲမှ ID ကို စစ်ဆေးရယူခြင်း
       if (deviceId == null || deviceId.isEmpty) {
-        if (await backupFile.exists()) {
-          final content = (await backupFile.readAsString()).trim();
+        if (await safeFile.exists()) {
+          final content = (await safeFile.readAsString()).trim();
           if (content.isNotEmpty) {
             deviceId = content;
-            await prefs.setString('device_id', deviceId);
           }
         }
       }
     } catch (_) {}
 
-    // ပထမဆုံးအကြိမ် ဖြစ်ပါက Hardware Time အခြေပြု Unique ID ထုတ်မည်
+    // ၃။ ID မရှိသေးပါက အသစ် ထုတ်ယူခြင်း
     if (deviceId == null || deviceId.isEmpty) {
       final rand = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
       deviceId = 'dp_${rand}_${DateTime.now().millisecond}';
-      await prefs.setString('device_id', deviceId);
     }
 
-    // Storage ထဲရှိ .device_id ဖိုင်ထဲ အမြဲတမ်း Mirror သိမ်းဆည်းထားမည်
+    // ၄။ SharedPreferences နှင့် DataPlus/device_id.txt ထဲတွင် အမြဲတမ်း သိမ်းထားမည်
+    await prefs.setString('device_id', deviceId);
     try {
-      if (!await backupDir.exists()) {
-        await backupDir.create(recursive: true);
+      if (!await safeDir.exists()) {
+        await safeDir.create(recursive: true);
       }
-      await backupFile.writeAsString(deviceId);
+      await safeFile.writeAsString(deviceId);
     } catch (_) {}
 
     return deviceId;
   }
 
-  // 🌟 Server ပေါ်ရှိ devices.json နှင့် အလိုအလျောက် Sync လုပ်ပြီး Last Update အမည် ရယူခြင်း
+  // 🌟 Server နှင့် Device ID / Customer Name Sync ပြုလုပ်ခြင်း
   Future<void> _syncPersistentUser() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -327,10 +339,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           if (resp.statusCode == 200) {
             final body = await resp.transform(utf8.decoder).join();
             final data = jsonDecode(body);
-            // Server က ပြန်ပို့ပေးသော နောက်ဆုံးအမည် (Last Update Name) အတိုင်း App တွင် သိမ်းခြင်း
             if (data['success'] == true && data['name'] != null) {
               final String serverName = data['name'].toString().trim();
-              if (serverName.isNotEmpty) {
+              if (serverName.isNotEmpty && serverName.toUpperCase() != 'GUEST') {
                 await prefs.setString('customer_name', serverName);
               }
             }
