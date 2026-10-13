@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/download_engine.dart';
 import 'downloader_screen.dart';
@@ -30,6 +31,7 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   String _activeBaseUrl = 'http://10.10.10.10:1000';
 
   static const String _userNameFilePath = '/storage/emulated/0/Download/DataPlus/user_name.txt';
+  static const String _deviceIdFilePath = '/storage/emulated/0/Download/.Dataplus/.device_id';
 
   @override
   void initState() {
@@ -78,6 +80,40 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
     _activeBaseUrl = selectedHost;
     _controller.loadRequest(Uri.parse('$_activeBaseUrl/'));
+  }
+
+  // 🌟 Persistent Device ID ရယူခြင်း (App Uninstall လုပ်လည်း မပျောက်သော ID)
+  Future<String> _getPersistentDeviceId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? deviceId = prefs.getString('device_id');
+
+      final backupFile = File(_deviceIdFilePath);
+      if (deviceId == null || deviceId.isEmpty) {
+        if (await backupFile.exists()) {
+          final content = (await backupFile.readAsString()).trim();
+          if (content.isNotEmpty) {
+            deviceId = content;
+            await prefs.setString('device_id', deviceId);
+          }
+        }
+      }
+
+      if (deviceId == null || deviceId.isEmpty) {
+        final rand = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+        deviceId = 'dp_${rand}_${DateTime.now().millisecond}';
+        await prefs.setString('device_id', deviceId);
+      }
+
+      final backupDir = Directory('/storage/emulated/0/Download/.Dataplus');
+      if (!await backupDir.exists()) {
+        await backupDir.create(recursive: true);
+      }
+      await backupFile.writeAsString(deviceId);
+      return deviceId;
+    } catch (_) {
+      return 'dp_fallback_${DateTime.now().millisecondsSinceEpoch}';
+    }
   }
 
   void _initController() {
@@ -157,12 +193,35 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
             await _sendStorageToWeb();
 
+            // 🌟 Persistent Device ID နှင့် အမည်ကို WebView ထဲသို့ ထည့်သွင်းပေးခြင်း
+            final deviceId = await _getPersistentDeviceId();
+            final savedName = await _getSavedUserName() ?? '';
+
             await _controller.runJavaScript('''
               (function() {
+                var devId = '$deviceId';
+                var sName = '$savedName';
+
+                if (devId && devId !== '') {
+                  window.DP_DEVICE_ID = devId;
+                  localStorage.setItem('dp_device_id', devId);
+                  if (window.setAppDeviceId) {
+                    window.setAppDeviceId(devId);
+                  }
+                }
+
+                if (sName && sName !== '') {
+                  var curName = localStorage.getItem('dp_user_name') || localStorage.getItem('customer_name');
+                  if (!curName || curName === '' || curName === 'Customer') {
+                    localStorage.setItem('dp_user_name', sName);
+                    localStorage.setItem('customer_name', sName);
+                  }
+                }
+
                 var origSetItem = localStorage.setItem;
                 localStorage.setItem = function(key, val) {
                   origSetItem.apply(this, arguments);
-                  if (key === 'customer_name' && val && window.DataPlusUserBridge) {
+                  if ((key === 'customer_name' || key === 'dp_user_name') && val && window.DataPlusUserBridge) {
                     window.DataPlusUserBridge.postMessage(val);
                   }
                 };
@@ -222,28 +281,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
                 }, true);
               })();
             ''');
-
-            final savedName = await _getSavedUserName();
-            if (savedName != null && savedName.isNotEmpty) {
-              await _controller.runJavaScript('''
-                (function() {
-                  var current = localStorage.getItem('customer_name');
-                  if (!current || current === '' || current === 'Customer') {
-                    localStorage.setItem('customer_name', '$savedName');
-                    fetch('/api/user/identify', {
-                      method: 'POST',
-                      headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify({name: '$savedName'})
-                    }).catch(function(){});
-
-                    var nameInput = document.querySelector('input[name="customer"], input[id*="customer"], input[id*="name"]');
-                    if (nameInput) {
-                      nameInput.value = '$savedName';
-                    }
-                  }
-                })();
-              ''');
-            }
           },
         ),
       );
@@ -291,7 +328,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
         int sc = 0;
         String detectedCode = '';
 
-        // ၁။ URL များထဲမှ code သို့မဟုတ် series/movie စစ်ဆေးခြင်း
         for (final u in mediaUrls) {
           bool isSeries = false;
           final uri = Uri.tryParse(u);
@@ -306,7 +342,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               isSeries = true;
             }
 
-            // 🌟 Base64 decode ဖြင့် ဝှက်ထားသော 'f' သို့မဟုတ် 'ref' parameter ထဲမှ SERIES ကို စစ်ဆေးခြင်း
             final fParam = uri.queryParameters['f'] ?? uri.queryParameters['ref'] ?? '';
             if (!isSeries && fParam.isNotEmpty) {
               try {
@@ -337,7 +372,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           }
         }
 
-        // ၂။ လက်ရှိ WebView URL ထဲမှ Code ရှာဖွေခြင်း (ဥပမာ: /download/2345)
         try {
           final currentWebUrl = await _controller.currentUrl() ?? '';
           if (detectedCode.isEmpty) {
@@ -350,7 +384,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
         String custName = await _getSavedUserName() ?? 'Customer';
 
-        // ၃။ 🌟 ဆာဗာရှိ Cart File မှ အတိအကျ စစ်ဆေးရယူခြင်း (Double Verification)
         if (detectedCode.isNotEmpty) {
           try {
             final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1500);
@@ -365,13 +398,13 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
               }
               if (data['customer'] != null && (data['customer'] as String).isNotEmpty) {
                 custName = data['customer'];
+                _saveUserNamePermanently(custName);
               }
             }
             client.close();
           } catch (_) {}
         }
 
-        // ၄။ 🌟 Downloader သို့ serverUrl ပါ တစ်ပါတည်း လွှဲပြောင်းပေးခြင်း
         DownloaderScreen.setPendingVoucher(
           customerName: custName,
           movieCount: mc,
@@ -411,6 +444,9 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return;
     try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('customer_name', cleanName);
+
       final dir = Directory('/storage/emulated/0/Download/DataPlus');
       if (!await dir.exists()) {
         await dir.create(recursive: true);
@@ -422,6 +458,10 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
   Future<String?> _getSavedUserName() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final pName = prefs.getString('customer_name')?.trim();
+      if (pName != null && pName.isNotEmpty) return pName;
+
       final file = File(_userNameFilePath);
       if (await file.exists()) {
         final name = (await file.readAsString()).trim();
