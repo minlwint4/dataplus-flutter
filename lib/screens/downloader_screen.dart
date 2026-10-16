@@ -343,7 +343,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   },
                   icon: const Icon(Icons.print, size: 16, color: Colors.white),
                   label: const Text(
-                    "Print ထုတ်မည်",
+                    "ဘောက်ချာယူမည်",
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
@@ -434,6 +434,44 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     double mb = bytes / (1024 * 1024);
     if (mb >= 1024) return "${(mb / 1024).toStringAsFixed(1)} GB";
     return "${mb.toStringAsFixed(1)} MB";
+  }
+
+  // 🌟 ဖုန်း၏ Default Apps Settings ကို တိုက်ရိုက် ဖွင့်ပေးမည့် Function
+  Future<void> _openDefaultAppsSettings() async {
+    bool opened = false;
+
+    // ၁။ Default Apps Settings သို့ တိုက်ရိုက်ဖွင့်ခြင်း
+    try {
+      const defaultAppsIntent = AndroidIntent(
+        action: 'android.settings.MANAGE_DEFAULT_APPS_SETTINGS',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      );
+      await defaultAppsIntent.launch();
+      opened = true;
+    } catch (_) {}
+
+    // ၂။ အကယ်၍ ဖုန်းအချို့တွင် အထက်ပါ Intent မရပါက Application Settings (Apps List) သို့ ဖွင့်ပေးခြင်း
+    if (!opened) {
+      try {
+        const appSettingsIntent = AndroidIntent(
+          action: 'android.settings.APPLICATION_SETTINGS',
+          flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+        );
+        await appSettingsIntent.launch();
+        opened = true;
+      } catch (_) {}
+    }
+
+    // ၃။ နောက်ဆုံး အရန်အနေဖြင့် ရိုးရိုး Settings ဖွင့်ပေးခြင်း
+    if (!opened) {
+      try {
+        const settingsIntent = AndroidIntent(
+          action: 'android.settings.SETTINGS',
+          flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+        );
+        await settingsIntent.launch();
+      } catch (_) {}
+    }
   }
 
   Future<void> _showAddUrlDialog() async {
@@ -565,210 +603,244 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 Text("Settings & Update", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
               ],
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("ဒေါင်းလုဒ် သိမ်းဆည်းမည့်နေရာ:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                RadioListTile<String>(
-                  value: 'internal',
-                  groupValue: engine.storageTarget,
-                  activeColor: const Color(0xFF00E676),
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: const Text("📱 ဖုန်း Storage (Internal)", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
-                  subtitle: Text("လက်ကျန်: ${_formatBytes(engine.freeStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                  onChanged: (val) {
-                    if (val != null) {
-                      engine.setStorageTarget(val);
-                      setModalState(() {});
-                      setState(() {});
-                    }
-                  },
-                ),
-                RadioListTile<String>(
-                  value: 'sdcard',
-                  groupValue: engine.storageTarget,
-                  activeColor: const Color(0xFF00E676),
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Row(
-                    children: [
-                      const Text("💾 SD ကတ် (Memory Card)", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
-                      if (!engine.isSdAvailable)
-                        const Text(" (မရှိပါ)", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
-                    ],
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("ဒေါင်းလုဒ် သိမ်းဆည်းမည့်နေရာ:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  RadioListTile<String>(
+                    value: 'internal',
+                    groupValue: engine.storageTarget,
+                    activeColor: const Color(0xFF00E676),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text("📱 ဖုန်း Storage (Internal)", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                    subtitle: Text("လက်ကျန်: ${_formatBytes(engine.freeStorageBytes)}", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                    onChanged: (val) {
+                      if (val != null) {
+                        engine.setStorageTarget(val);
+                        setModalState(() {});
+                        setState(() {});
+                      }
+                    },
                   ),
-                  subtitle: Text(
-                    engine.isSdAvailable ? "လက်ကျန်: ${_formatBytes(engine.freeSdBytes)}" : "ဖုန်းထဲတွင် SD ကတ် ထည့်မထားပါ",
-                    style: TextStyle(color: engine.isSdAvailable ? const Color(0xFF8B949E) : const Color(0xFFF85149), fontSize: 11),
-                  ),
-                  onChanged: engine.isSdAvailable
-                      ? (val) {
-                          if (val != null) {
-                            engine.setStorageTarget(val);
-                            setModalState(() {});
-                            setState(() {});
-                          }
-                        }
-                      : null,
-                ),
-                const Divider(color: Color(0xFF30363D), height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  RadioListTile<String>(
+                    value: 'sdcard',
+                    groupValue: engine.storageTarget,
+                    activeColor: const Color(0xFF00E676),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Row(
                       children: [
-                        Text("App Version", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        Text(kAppVersion, style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                        const Text("💾 SD ကတ် (Memory Card)", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                        if (!engine.isSdAvailable)
+                          const Text(" (မရှိပါ)", style: TextStyle(color: Color(0xFFF85149), fontSize: 11)),
                       ],
                     ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF238636),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        minimumSize: Size.zero,
+                    subtitle: Text(
+                      engine.isSdAvailable ? "လက်ကျန်: ${_formatBytes(engine.freeSdBytes)}" : "ဖုန်းထဲတွင် SD ကတ် ထည့်မထားပါ",
+                      style: TextStyle(color: engine.isSdAvailable ? const Color(0xFF8B949E) : const Color(0xFFF85149), fontSize: 11),
+                    ),
+                    onChanged: engine.isSdAvailable
+                        ? (val) {
+                            if (val != null) {
+                              engine.setStorageTarget(val);
+                              setModalState(() {});
+                              setState(() {});
+                            }
+                          }
+                        : null,
+                  ),
+                  const Divider(color: Color(0xFF30363D), height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("App Version", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text(kAppVersion, style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11)),
+                        ],
                       ),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        MainNavigationScreen.checkLocalServerUpdate(context, isManual: true);
-                      },
-                      icon: const Icon(Icons.refresh, size: 14, color: Colors.white),
-                      label: const Text("Update စစ်မည်", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                    )
-                  ],
-                ),
-                const Divider(color: Color(0xFF30363D), height: 18),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Developer Mode & USB Debugging",
-                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 3),
-                    const Text(
-                      "ဖွင့်ရန် အဆင့် (၂) ဆင့်:",
-                      style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1F6FEB),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                              minimumSize: Size.zero,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            ),
-                            onPressed: () async {
-                              bool opened = false;
-                              try {
-                                const miuiIntent = AndroidIntent(
-                                  action: 'android.intent.action.MAIN',
-                                  package: 'com.android.settings',
-                                  componentName: 'com.android.settings.Settings\$MyDeviceInfoActivity',
-                                  flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-                                );
-                                await miuiIntent.launch();
-                                opened = true;
-                              } catch (_) {}
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF238636),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          MainNavigationScreen.checkLocalServerUpdate(context, isManual: true);
+                        },
+                        icon: const Icon(Icons.refresh, size: 14, color: Colors.white),
+                        label: const Text("Update စစ်မည်", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      )
+                    ],
+                  ),
+                  const Divider(color: Color(0xFF30363D), height: 18),
 
-                              if (!opened) {
+                  // 🌟 အသစ်ထပ်တိုးထားသော ဖုန်း၏ Default Apps ဖွင့်သည့် Section
+                  const Text(
+                    "Default Apps (မူလသတ်မှတ်ထားသော အက်ပ်များ):",
+                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 3),
+                  const Text(
+                    "Video Player / Browser Default မှားရွေးမိပါက ပြန်ပြင်ရန်:",
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B5CF6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: () async {
+                        await _openDefaultAppsSettings();
+                      },
+                      icon: const Icon(Icons.app_settings_alt_rounded, size: 16, color: Colors.white),
+                      label: const Text(
+                        "ဖုန်း၏ Default Apps Settings ဖွင့်မည်",
+                        style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+
+                  const Divider(color: Color(0xFF30363D), height: 18),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Developer Mode & USB Debugging",
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        "ဖွင့်ရန် အဆင့် (၂) ဆင့်:",
+                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1F6FEB),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                minimumSize: Size.zero,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: () async {
+                                bool opened = false;
                                 try {
-                                  const infoIntent = AndroidIntent(
-                                    action: 'android.settings.DEVICE_INFO_SETTINGS',
+                                  const miuiIntent = AndroidIntent(
+                                    action: 'android.intent.action.MAIN',
+                                    package: 'com.android.settings',
+                                    componentName: 'com.android.settings.Settings\$MyDeviceInfoActivity',
                                     flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
                                   );
-                                  await infoIntent.launch();
+                                  await miuiIntent.launch();
                                   opened = true;
                                 } catch (_) {}
-                              }
 
-                              if (!opened) {
+                                if (!opened) {
+                                  try {
+                                    const infoIntent = AndroidIntent(
+                                      action: 'android.settings.DEVICE_INFO_SETTINGS',
+                                      flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+                                    );
+                                    await infoIntent.launch();
+                                    opened = true;
+                                  } catch (_) {}
+                                }
+
+                                if (!opened) {
+                                  try {
+                                    const settingsIntent = AndroidIntent(
+                                      action: 'android.settings.SETTINGS',
+                                      flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+                                    );
+                                    await settingsIntent.launch();
+                                  } catch (_) {}
+                                }
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        "ℹ️ 'My device' > 'Detailed info and specs' ထဲမှ 'OS version' ကို ၇ ချက် နှိပ်ပါ",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                      duration: Duration(seconds: 5),
+                                      backgroundColor: Color(0xFF1E293B),
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.phone_android, size: 13, color: Colors.white),
+                              label: const Text(
+                                "၁။ My device",
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF238636),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                minimumSize: Size.zero,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: () async {
                                 try {
+                                  const devIntent = AndroidIntent(
+                                    action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS',
+                                    flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+                                  );
+                                  await devIntent.launch();
+                                } catch (_) {
                                   const settingsIntent = AndroidIntent(
                                     action: 'android.settings.SETTINGS',
                                     flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
                                   );
                                   await settingsIntent.launch();
-                                } catch (_) {}
-                              }
+                                }
 
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      "ℹ️ 'My device' > 'Detailed info and specs' ထဲမှ 'OS version' ကို ၇ ချက် နှိပ်ပါ",
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        "⚡ Developer Options ထဲမှ 'USB debugging' ကို On ပေးပါ",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                      duration: Duration(seconds: 4),
+                                      backgroundColor: Color(0xFF1E293B),
                                     ),
-                                    duration: Duration(seconds: 5),
-                                    backgroundColor: Color(0xFF1E293B),
-                                  ),
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.phone_android, size: 13, color: Colors.white),
-                            label: const Text(
-                              "၁။ My device",
-                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.adb_rounded, size: 13, color: Colors.white),
+                              label: const Text(
+                                "၂။ USB Debug",
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF238636),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                              minimumSize: Size.zero,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            ),
-                            onPressed: () async {
-                              try {
-                                const devIntent = AndroidIntent(
-                                  action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS',
-                                  flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-                                );
-                                await devIntent.launch();
-                              } catch (_) {
-                                const settingsIntent = AndroidIntent(
-                                  action: 'android.settings.SETTINGS',
-                                  flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-                                );
-                                await settingsIntent.launch();
-                              }
-
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      "⚡ Developer Options ထဲမှ 'USB debugging' ကို On ပေးပါ",
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                    ),
-                                    duration: Duration(seconds: 4),
-                                    backgroundColor: Color(0xFF1E293B),
-                                  ),
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.adb_rounded, size: 13, color: Colors.white),
-                            label: const Text(
-                              "၂။ USB Debug",
-                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
