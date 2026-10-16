@@ -169,7 +169,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     } catch (_) {}
   }
 
-  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function (10.10.10.10 ရော 192.168.1.50 ပါ Auto စမ်းသပ်စနစ်)
+  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function
   Future<void> _sendPrintJob(BuildContext ctx, String serverUrl, String customer, int mc, int sc) async {
     final List<String> targetServers = [
       serverUrl,
@@ -211,7 +211,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     if (printSuccess) {
       ScaffoldMessenger.of(ctx).showSnackBar(
         const SnackBar(
-          content: Text("✅ ဘောက်ချာ ပရင့်ထုတ်ပြီးပါပြီ"),
+          content: Text("✅ ဘောက်ချာ ထုတ်ယူပြီးပါပြီ"),
           backgroundColor: Color(0xFF238636),
           duration: Duration(seconds: 2),
         ),
@@ -250,7 +250,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final int grandTotal = movieTotal + seriesTotal;
     final String nowStr = DateTime.now().toString().substring(0, 16);
 
-    // 🌟 ဘောက်ချာပေါ်ချိန်တွင် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံထွက်စေခြင်း
     _playPhoneVoiceSequence(serverUrl, grandTotal);
 
     await showDialog(
@@ -330,7 +329,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         actions: [
           Row(
             children: [
-              // 🖨️ Print ခလုတ်
+              // 🖨️ "ဘောက်ချာထုတ်မည်" ခလုတ်
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
@@ -343,7 +342,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   },
                   icon: const Icon(Icons.print, size: 16, color: Colors.white),
                   label: const Text(
-                    "ဘောက်ချာယူမည်",
+                    "ဘောက်ချာထုတ်မည်",
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
@@ -440,7 +439,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   Future<void> _openDefaultAppsSettings() async {
     bool opened = false;
 
-    // ၁။ Default Apps Settings သို့ တိုက်ရိုက်ဖွင့်ခြင်း
     try {
       const defaultAppsIntent = AndroidIntent(
         action: 'android.settings.MANAGE_DEFAULT_APPS_SETTINGS',
@@ -450,7 +448,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       opened = true;
     } catch (_) {}
 
-    // ၂။ အကယ်၍ ဖုန်းအချို့တွင် အထက်ပါ Intent မရပါက Application Settings (Apps List) သို့ ဖွင့်ပေးခြင်း
     if (!opened) {
       try {
         const appSettingsIntent = AndroidIntent(
@@ -462,7 +459,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       } catch (_) {}
     }
 
-    // ၃။ နောက်ဆုံး အရန်အနေဖြင့် ရိုးရိုး Settings ဖွင့်ပေးခြင်း
     if (!opened) {
       try {
         const settingsIntent = AndroidIntent(
@@ -681,7 +677,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                   const Divider(color: Color(0xFF30363D), height: 18),
 
-                  // 🌟 အသစ်ထပ်တိုးထားသော ဖုန်း၏ Default Apps ဖွင့်သည့် Section
+                  // 🌟 ဖုန်း၏ Default Apps ဖွင့်သည့် Section
                   const Text(
                     "Default Apps (မူလသတ်မှတ်ထားသော အက်ပ်များ):",
                     style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
