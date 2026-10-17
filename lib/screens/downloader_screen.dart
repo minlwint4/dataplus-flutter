@@ -436,49 +436,58 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // 🌟 Browser, Camera, Gallery, Music, Play video တို့ကို Default ရွေးသည့် နေရာသို့ တိုက်ရိုက် ဖွင့်ပေးမည့် Function
+  // 🌟 ဖုန်း၏ Default Apps / Manage Apps သို့ သေချာပေါက် ပွင့်သွားစေမည့် Function
   Future<void> _openDefaultAppsSettings() async {
     final List<AndroidIntent> candidateIntents = [
-      // ၁။ Xiaomi (MIUI / HyperOS) ၏ Browser, Camera, Gallery, Music, Play video Default ရွေးသည့် စာမျက်နှာအစစ်
-      const AndroidIntent(
-        action: 'android.intent.action.MAIN',
-        package: 'com.android.settings',
-        componentName: 'com.android.settings.applications.PreferredActivitySettings',
-        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-      ),
-      // ၂။ Xiaomi Manage Apps > Default Apps Activity
+      // ၁။ Xiaomi (MIUI / HyperOS) ၏ Apps > Manage Apps စာမျက်နှာ (ညာဘက်အပေါ် ⋮ မှ Default apps သို့ ဝင်ရသည့်နေရာ)
       const AndroidIntent(
         action: 'android.intent.action.MAIN',
         package: 'com.miui.securitycenter',
-        componentName: 'com.miui.appmanager.ApplicationsDetailsActivity',
+        componentName: 'com.miui.appmanager.AppManagerMainActivity',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
       ),
-      // ၃။ SubSettings မှတစ်ဆင့် PreferredList (Browser/Gallery/Video) ဆွဲဖွင့်ခြင်း
-      const AndroidIntent(
-        action: 'android.intent.action.MAIN',
-        package: 'com.android.settings',
-        componentName: 'com.android.settings.SubSettings',
-        arguments: <String, dynamic>{
-          ':settings:show_fragment': 'com.android.settings.applications.PreferredListSettings',
-        },
-        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-      ),
-      // ၄။ Standard Android Default Apps Settings (Samsung, Vivo, Oppo, Realme စသည်တို့အတွက်)
+      // ၂။ Standard Android Default Apps Settings (Samsung, Vivo, Oppo, Realme စသည်တို့အတွက်)
       const AndroidIntent(
         action: 'android.settings.MANAGE_DEFAULT_APPS_SETTINGS',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
       ),
-      // ၅။ နောက်ဆုံး အရန် Manage Apps စာမျက်နှာ
+      // ၃။ Android Application Settings (Manage Apps)
       const AndroidIntent(
         action: 'android.settings.MANAGE_APPLICATIONS_SETTINGS',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      ),
+      // ၄။ Android General Apps Settings
+      const AndroidIntent(
+        action: 'android.settings.APPLICATION_SETTINGS',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      ),
+      // ၅။ နောက်ဆုံး အရန် Main Settings
+      const AndroidIntent(
+        action: 'android.settings.SETTINGS',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
       ),
     ];
 
     for (final intent in candidateIntents) {
       try {
-        await intent.launch();
-        return; // ပွင့်သွားပါက ရပ်မည်
+        final bool? canResolve = await intent.canResolveActivity();
+        if (canResolve == true) {
+          await intent.launch();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "ℹ️ ညာဘက်အပေါ်ထောင့် (⋮) > 'Other settings' > 'Default apps' ကို နှိပ်၍ Play video ကို ရွေးပါ",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                duration: Duration(seconds: 5),
+                backgroundColor: Color(0xFF1E293B),
+              ),
+            );
+          }
+          return;
+        }
       } catch (_) {}
     }
   }
@@ -697,7 +706,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                   const SizedBox(height: 3),
                   const Text(
-                    "Browser, Gallery, Play video တို့ကို မိမိစိတ်ကြိုက် App ဖြင့် ပြောင်းဖွင့်ရန်:",
+                    "Manage apps > (⋮) Other settings > Default apps သို့ ဖွင့်ရန်:",
                     style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
                   const SizedBox(height: 8),
@@ -753,8 +762,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                                     componentName: 'com.android.settings.Settings\$MyDeviceInfoActivity',
                                     flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
                                   );
-                                  await miuiIntent.launch();
-                                  opened = true;
+                                  if (await miuiIntent.canResolveActivity() == true) {
+                                    await miuiIntent.launch();
+                                    opened = true;
+                                  }
                                 } catch (_) {}
 
                                 if (!opened) {
