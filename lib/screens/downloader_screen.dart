@@ -169,7 +169,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     } catch (_) {}
   }
 
-  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function
+  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function (10.10.10.10 ရော 192.168.1.50 ပါ Auto စမ်းသပ်စနစ်)
   Future<void> _sendPrintJob(BuildContext ctx, String serverUrl, String customer, int mc, int sc) async {
     final List<String> targetServers = [
       serverUrl,
@@ -211,7 +211,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     if (printSuccess) {
       ScaffoldMessenger.of(ctx).showSnackBar(
         const SnackBar(
-          content: Text("✅ ဘောက်ချာ ထုတ်ယူပြီးပါပြီ"),
+          content: Text("✅ ဘောက်ချာ ထုတ်ပြီးပါပြီ"),
           backgroundColor: Color(0xFF238636),
           duration: Duration(seconds: 2),
         ),
@@ -250,6 +250,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final int grandTotal = movieTotal + seriesTotal;
     final String nowStr = DateTime.now().toString().substring(0, 16);
 
+    // 🌟 ဘောက်ချာပေါ်ချိန်တွင် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံထွက်စေခြင်း
     _playPhoneVoiceSequence(serverUrl, grandTotal);
 
     await showDialog(
@@ -329,7 +330,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         actions: [
           Row(
             children: [
-              // 🖨️ "ဘောက်ချာထုတ်မည်" ခလုတ်
+              // 🧾 ဘောက်ချာယူမယ် ခလုတ်
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
@@ -340,9 +341,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   onPressed: () {
                     _sendPrintJob(context, serverUrl, customerName, movieCount, seriesCount);
                   },
-                  icon: const Icon(Icons.print, size: 16, color: Colors.white),
+                  icon: const Icon(Icons.receipt_long, size: 16, color: Colors.white),
                   label: const Text(
-                    "ဘောက်ချာထုတ်မည်",
+                    "ဘောက်ချာယူမယ်",
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
@@ -435,37 +436,49 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // 🌟 ဖုန်း၏ Default Apps Settings ကို တိုက်ရိုက် ဖွင့်ပေးမည့် Function
+  // 🌟 Browser, Camera, Gallery, Music, Play video တို့ကို Default ရွေးသည့် နေရာသို့ တိုက်ရိုက် ဖွင့်ပေးမည့် Function
   Future<void> _openDefaultAppsSettings() async {
-    bool opened = false;
-
-    try {
-      const defaultAppsIntent = AndroidIntent(
+    final List<AndroidIntent> candidateIntents = [
+      // ၁။ Xiaomi (MIUI / HyperOS) ၏ Browser, Camera, Gallery, Music, Play video Default ရွေးသည့် စာမျက်နှာအစစ်
+      const AndroidIntent(
+        action: 'android.intent.action.MAIN',
+        package: 'com.android.settings',
+        componentName: 'com.android.settings.applications.PreferredActivitySettings',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      ),
+      // ၂။ Xiaomi Manage Apps > Default Apps Activity
+      const AndroidIntent(
+        action: 'android.intent.action.MAIN',
+        package: 'com.miui.securitycenter',
+        componentName: 'com.miui.appmanager.ApplicationsDetailsActivity',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      ),
+      // ၃။ SubSettings မှတစ်ဆင့် PreferredList (Browser/Gallery/Video) ဆွဲဖွင့်ခြင်း
+      const AndroidIntent(
+        action: 'android.intent.action.MAIN',
+        package: 'com.android.settings',
+        componentName: 'com.android.settings.SubSettings',
+        arguments: <String, dynamic>{
+          ':settings:show_fragment': 'com.android.settings.applications.PreferredListSettings',
+        },
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      ),
+      // ၄။ Standard Android Default Apps Settings (Samsung, Vivo, Oppo, Realme စသည်တို့အတွက်)
+      const AndroidIntent(
         action: 'android.settings.MANAGE_DEFAULT_APPS_SETTINGS',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-      );
-      await defaultAppsIntent.launch();
-      opened = true;
-    } catch (_) {}
+      ),
+      // ၅။ နောက်ဆုံး အရန် Manage Apps စာမျက်နှာ
+      const AndroidIntent(
+        action: 'android.settings.MANAGE_APPLICATIONS_SETTINGS',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      ),
+    ];
 
-    if (!opened) {
+    for (final intent in candidateIntents) {
       try {
-        const appSettingsIntent = AndroidIntent(
-          action: 'android.settings.APPLICATION_SETTINGS',
-          flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-        );
-        await appSettingsIntent.launch();
-        opened = true;
-      } catch (_) {}
-    }
-
-    if (!opened) {
-      try {
-        const settingsIntent = AndroidIntent(
-          action: 'android.settings.SETTINGS',
-          flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-        );
-        await settingsIntent.launch();
+        await intent.launch();
+        return; // ပွင့်သွားပါက ရပ်မည်
       } catch (_) {}
     }
   }
@@ -677,14 +690,14 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                   const Divider(color: Color(0xFF30363D), height: 18),
 
-                  // 🌟 ဖုန်း၏ Default Apps ဖွင့်သည့် Section
+                  // 🌟 Browser, Gallery, Play video Default ရွေးသည့် ခလုတ်
                   const Text(
-                    "Default Apps (မူလသတ်မှတ်ထားသော အက်ပ်များ):",
+                    "Default Apps (Video Player / Browser ရွေးရန်):",
                     style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 3),
                   const Text(
-                    "Video Player / Browser Default မှားရွေးမိပါက ပြန်ပြင်ရန်:",
+                    "Browser, Gallery, Play video တို့ကို မိမိစိတ်ကြိုက် App ဖြင့် ပြောင်းဖွင့်ရန်:",
                     style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
                   const SizedBox(height: 8),
@@ -699,9 +712,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       onPressed: () async {
                         await _openDefaultAppsSettings();
                       },
-                      icon: const Icon(Icons.app_settings_alt_rounded, size: 16, color: Colors.white),
+                      icon: const Icon(Icons.video_settings_rounded, size: 16, color: Colors.white),
                       label: const Text(
-                        "ဖုန်း၏ Default Apps Settings ဖွင့်မည်",
+                        "Default Apps (Play video / Browser) ရွေးမည်",
                         style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
                       ),
                     ),
