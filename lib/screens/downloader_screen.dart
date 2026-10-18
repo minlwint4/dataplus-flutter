@@ -439,7 +439,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   // 🌟 ဖုန်း၏ Default Apps / Manage Apps သို့ သေချာပေါက် ပွင့်သွားစေမည့် Function
   Future<void> _openDefaultAppsSettings() async {
     final List<AndroidIntent> candidateIntents = [
-      // ၁။ Xiaomi (MIUI / HyperOS) ၏ Apps > Manage Apps စာမျက်နှာ (ညာဘက်အပေါ် ⋮ မှ Default apps သို့ ဝင်ရသည့်နေရာ)
+      // ၁။ Xiaomi (MIUI / HyperOS) ၏ Apps > Manage Apps စာမျက်နှာ
       const AndroidIntent(
         action: 'android.intent.action.MAIN',
         package: 'com.miui.securitycenter',
@@ -874,86 +874,61 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     );
   }
 
+  // 🌟 Finished ထဲမှ ဖျက်လျှင် ဖုန်း/SD ထဲရှိ မူရင်းဗီဒီယိုဖိုင်ပါ တစ်ခါတည်း အပြီးတိုင် ဖျက်ပေးမည့် စနစ်
   Future<void> _confirmDelete({
     required List<DownloadItem> items,
     required String title,
     required bool isFinishedTab,
   }) async {
-    bool deleteActualFile = false;
-    
     if (isFinishedTab) {
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            backgroundColor: const Color(0xFF1E232B),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            title: Row(
-              children: [
-                const Icon(Icons.delete_forever, color: Color(0xFFF85149), size: 26),
-                const SizedBox(width: 8),
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  items.length == 1
-                      ? "'${items.first.name}' ကို ဖျက်ရန် သေချာပါသလား?"
-                      : "ရွေးချယ်ထားသော (${items.length}) ဖိုင်ကို ဖျက်ရန် သေချာပါသလား?",
-                  style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141A22),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF30363D)),
-                  ),
-                  child: CheckboxListTile(
-                    value: deleteActualFile,
-                    activeColor: const Color(0xFFF85149),
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    title: const Text(
-                      "With file (ဖိုင်ပါ အပြီးဖျက်မည်)",
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: const Text(
-                      "အမှန်ခြစ်ပါက ဖုန်း/SD ထဲမှ မူရင်းဖိုင်ပါ အပြီးတိုင် ဖျက်ပစ်ပါမည်",
-                      style: TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
-                    ),
-                    onChanged: (val) {
-                      setDialogState(() {
-                        deleteActualFile = val ?? false;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text("မဖျက်ပါ", style: TextStyle(color: Color(0xFF8B949E))),
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E232B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          title: Row(
+            children: [
+              const Icon(Icons.delete_forever, color: Color(0xFFF85149), size: 26),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                items.length == 1
+                    ? "'${items.first.name}' ကို ဖုန်းထဲမှ အပြီးတိုင် ဖျက်ရန် သေချာပါသလား?"
+                    : "ရွေးချယ်ထားသော (${items.length}) ဖိုင်ကို ဖုန်းထဲမှ အပြီးတိုင် ဖျက်ရန် သေချာပါသလား?",
+                style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13.5),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFB91C1C),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                ),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text("ဖျက်မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text(
+                "⚠️ ဖျက်လိုက်ပါက ဖုန်း/SD ကတ်ထဲမှ မူရင်းဗီဒီယိုဖိုင်ပါ တစ်ပါတည်း ပျက်သွားပါမည်။",
+                style: TextStyle(color: Color(0xFFF85149), fontSize: 11.5),
               ),
             ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("မဖျက်ပါ", style: TextStyle(color: Color(0xFF8B949E))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB91C1C),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("အပြီးဖျက်မည်", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
       );
 
       if (confirmed == true) {
-        engine.deleteFinishedItems(items, deleteActualFile: deleteActualFile);
+        engine.deleteFinishedItems(items, deleteActualFile: true);
         setState(() {});
       }
     } else {
