@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 class DownloadItem {
   final String url;
@@ -63,17 +62,8 @@ class DownloadEngine extends ChangeNotifier {
     return internalDownloadPath;
   }
 
-  // 🌟 Screen မပိတ်အောင် ထိန်းသိမ်းပေးမည့် Helper Function
+  // 🌟 Native Android FLAG_KEEP_SCREEN_ON သို့ လှမ်းခေါ်ပြီး Screen မပိတ်အောင် ထိန်းခြင်း
   Future<void> _setKeepScreenOn(bool enable) async {
-    try {
-      if (enable) {
-        await WakelockPlus.enable();
-      } else {
-        await WakelockPlus.disable();
-      }
-    } catch (_) {}
-
-    // အကယ်၍ Native MethodChannel ရှိပါကလည်း တစ်ပြိုင်တည်း လှမ်းဖွင့်ပေးမည်
     try {
       const channel = MethodChannel('com.dataplus/storage');
       await channel.invokeMethod('keepScreenOn', {'enable': enable});
@@ -129,7 +119,7 @@ class DownloadEngine extends ChangeNotifier {
         for (var f in files) {
           if (f is File) {
             final name = f.path.split('/').last;
-            // 🌟 .device_id သို့မဟုတ် hidden/temp ဖိုင်များကို Finish စာရင်းထဲ လုံးဝ မထည့်ပါ
+            // 🌟 .device_id သို့မဟုတ် hidden/temp ဖိုင်များကို Finish စာရင်းထဲ မထည့်ပါ
             if (name.startsWith('.') || name == '.nomedia' || name.endsWith('.tmp') || name.contains('.part')) {
               continue;
             }
@@ -349,7 +339,7 @@ class DownloadEngine extends ChangeNotifier {
 
   Future<void> _startWorker() async {
     isDownloading = true;
-    // 🌟 ဒေါင်းလုဒ် စတင်သည်နှင့် ဖုန်း Screen မပိတ်အောင် ဖွင့်ထားမည်
+    // 🌟 ဒေါင်းလုဒ်စတင်သည်နှင့် Native Android ထံသို့ Screen ဖွင့်ထားရန် အချက်ပြခြင်း
     await _setKeepScreenOn(true);
 
     try {
@@ -390,7 +380,7 @@ class DownloadEngine extends ChangeNotifier {
       }
     } finally {
       isDownloading = false;
-      // 🌟 ဒေါင်းလုဒ်အားလုံး ပြီးဆုံးသွားချိန် (သို့မဟုတ် ရပ်နားချိန်) တွင် Screen Lock ပြန်လွှတ်ပေးမည်
+      // 🌟 ဒေါင်းလုဒ်ပြီးဆုံးချိန် သို့မဟုတ် ရပ်နားချိန်တွင် Screen Lock ပြန်လွှတ်ပေးခြင်း
       await _setKeepScreenOn(false);
     }
 
@@ -441,7 +431,7 @@ class DownloadEngine extends ChangeNotifier {
     final raf = await tempFile.open(mode: FileMode.write);
     try { raf.truncateSync(totalBytes); } catch (_) {}
 
-    // 🌟 Thread 9 ခုဖြင့် အမြန်ဆွဲမည်
+    // 🌟 Thread 9 ခုဖြင့် ပြိုင်တူ ဆွဲမည်
     const numThreads = 9;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
