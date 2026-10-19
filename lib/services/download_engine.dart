@@ -37,7 +37,6 @@ class DownloadEngine extends ChangeNotifier {
     updateStorageInfo();
   }
 
-  // 🌟 ဖိုင်သိမ်းမည့်လမ်းကြောင်းကို Download ဖိုဒါအောက်သို့ ပြောင်းလဲထားပါသည်
   static const String internalDownloadPath = '/storage/emulated/0/Download/.Dataplus';
   String sdDownloadPath = '';
 
@@ -61,6 +60,14 @@ class DownloadEngine extends ChangeNotifier {
       return '$sdDownloadPath/Download/.Dataplus';
     }
     return internalDownloadPath;
+  }
+
+  // 🌟 Native Android FLAG_KEEP_SCREEN_ON သို့ လှမ်းခေါ်ပြီး Screen မပိတ်အောင် ထိန်းခြင်း
+  Future<void> _setKeepScreenOn(bool enable) async {
+    try {
+      const channel = MethodChannel('com.dataplus/storage');
+      await channel.invokeMethod('keepScreenOn', {'enable': enable});
+    } catch (_) {}
   }
 
   Future<void> _ensureDirectoryAndNoMedia(String path) async {
@@ -112,7 +119,10 @@ class DownloadEngine extends ChangeNotifier {
         for (var f in files) {
           if (f is File) {
             final name = f.path.split('/').last;
-            if (name == '.nomedia' || name.endsWith('.tmp') || name.contains('.part')) continue;
+            // 🌟 .device_id သို့မဟုတ် hidden/temp ဖိုင်များကို Finish စာရင်းထဲ မထည့်ပါ
+            if (name.startsWith('.') || name == '.nomedia' || name.endsWith('.tmp') || name.contains('.part')) {
+              continue;
+            }
 
             if (!downloads.any((d) => d.name == name && d.status == 'finished')) {
               final stat = f.statSync();
@@ -217,6 +227,7 @@ class DownloadEngine extends ChangeNotifier {
         item.speed = 'Paused';
       }
     }
+    _setKeepScreenOn(false);
     notifyListeners();
   }
 
@@ -240,6 +251,9 @@ class DownloadEngine extends ChangeNotifier {
       item.isPaused = true;
       item.status = 'paused';
       item.speed = 'Paused';
+      if (!downloads.any((d) => d.status == 'downloading' || d.status == 'queued')) {
+        _setKeepScreenOn(false);
+      }
       notifyListeners();
     } else if (item.status == 'paused' || item.status == 'error') {
       item.isPaused = false;
@@ -325,42 +339,50 @@ class DownloadEngine extends ChangeNotifier {
 
   Future<void> _startWorker() async {
     isDownloading = true;
-    while (true) {
-      final queued = downloads.where((d) => d.status == 'queued').toList();
-      if (queued.isEmpty) break;
+    // 🌟 ဒေါင်းလုဒ်စတင်သည်နှင့် Native Android ထံသို့ Screen ဖွင့်ထားရန် အချက်ပြခြင်း
+    await _setKeepScreenOn(true);
 
-      final item = queued.first;
-      item.status = 'downloading';
-      item.isPaused = false;
-      item.isCanceled = false;
-      if (item.savePath.isEmpty) item.savePath = currentActivePath;
-      notifyListeners();
+    try {
+      while (true) {
+        final queued = downloads.where((d) => d.status == 'queued').toList();
+        if (queued.isEmpty) break;
 
-      try {
-        await _ensureDirectoryAndNoMedia(item.savePath);
-        await _downloadSmartEngine(item);
-        if (!item.isPaused && !item.isCanceled) {
-          item.status = 'finished';
-          item.progress = 1.0;
-          item.speed = 'COMPLETE ✅';
-          updateStorageInfo();
-        }
-      } catch (e) {
-        if (!item.isPaused && !item.isCanceled) {
-          item.status = 'error';
-          String errorMsg = e.toString().split('\n').first;
-          if (errorMsg.contains('Permission')) {
-            item.speed = "Storage Permission မရှိပါ!";
-          } else if (errorMsg.contains('SocketException') || errorMsg.contains('HttpException')) {
-            item.speed = "Network / Server ပြဿနာ";
-          } else {
-            item.speed = "Error: $errorMsg";
+        final item = queued.first;
+        item.status = 'downloading';
+        item.isPaused = false;
+        item.isCanceled = false;
+        if (item.savePath.isEmpty) item.savePath = currentActivePath;
+        notifyListeners();
+
+        try {
+          await _ensureDirectoryAndNoMedia(item.savePath);
+          await _downloadSmartEngine(item);
+          if (!item.isPaused && !item.isCanceled) {
+            item.status = 'finished';
+            item.progress = 1.0;
+            item.speed = 'COMPLETE ✅';
+            updateStorageInfo();
+          }
+        } catch (e) {
+          if (!item.isPaused && !item.isCanceled) {
+            item.status = 'error';
+            String errorMsg = e.toString().split('\n').first;
+            if (errorMsg.contains('Permission')) {
+              item.speed = "Storage Permission မရှိပါ!";
+            } else if (errorMsg.contains('SocketException') || errorMsg.contains('HttpException')) {
+              item.speed = "Network / Server ပြဿနာ";
+            } else {
+              item.speed = "Error: $errorMsg";
+            }
           }
         }
+        notifyListeners();
       }
-      notifyListeners();
+    } finally {
+      isDownloading = false;
+      // 🌟 ဒေါင်းလုဒ်ပြီးဆုံးချိန် သို့မဟုတ် ရပ်နားချိန်တွင် Screen Lock ပြန်လွှတ်ပေးခြင်း
+      await _setKeepScreenOn(false);
     }
-    isDownloading = false;
 
     if (!downloads.any((d) => d.status != 'finished')) {
       activeTab.value = 'Finished';
@@ -409,6 +431,7 @@ class DownloadEngine extends ChangeNotifier {
     final raf = await tempFile.open(mode: FileMode.write);
     try { raf.truncateSync(totalBytes); } catch (_) {}
 
+    // 🌟 Thread 9 ခုဖြင့် ပြိုင်တူ ဆွဲမည်
     const numThreads = 9;
     final partSize = totalBytes ~/ numThreads;
     final parts = List.generate(numThreads, (i) {
