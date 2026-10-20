@@ -240,12 +240,27 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final int mRemPrice = mRemCount * 300;
     final int movieTotal = mBundlePrice + mRemPrice;
 
-    final int sBundles = seriesCount ~/ 10;
-    final int sBundleCount = sBundles * 10;
-    final int sBundlePrice = sBundles * 1200;
-    final int sRemCount = seriesCount % 10;
-    final int sRemPrice = sRemCount * 150;
-    final int seriesTotal = sBundlePrice + sRemPrice;
+    // 🌟 Series ဈေးနှုန်းတွက်ချက်မှု (၄၀ နှင့်အထက် = ၁၀၀ နှုန်း၊ ၄၀ အောက် = ၁၀ ပိုင်း ၁၂၀၀ + ၁ ပိုင်း ၁၅၀)
+    final int seriesTotal;
+    final int sBundleCount;
+    final int sBundlePrice;
+    final int sRemCount;
+    final int sRemPrice;
+
+    if (seriesCount >= 40) {
+      seriesTotal = seriesCount * 100;
+      sBundleCount = 0;
+      sBundlePrice = 0;
+      sRemCount = 0;
+      sRemPrice = 0;
+    } else {
+      final int sBundles = seriesCount ~/ 10;
+      sBundleCount = sBundles * 10;
+      sBundlePrice = sBundles * 1200;
+      sRemCount = seriesCount % 10;
+      sRemPrice = sRemCount * 150;
+      seriesTotal = sBundlePrice + sRemPrice;
+    }
 
     final int grandTotal = movieTotal + seriesTotal;
     final String nowStr = DateTime.now().toString().substring(0, 16);
@@ -313,10 +328,14 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   style: const TextStyle(color: Color(0xFF00E676), fontSize: 12.5, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-                if (sBundleCount > 0)
-                  _buildVoucherRow("$sBundleCount x 120", "$sBundlePrice"),
-                if (sRemCount > 0)
-                  _buildVoucherRow("$sRemCount x 150", "$sRemPrice"),
+                if (seriesCount >= 40)
+                  _buildVoucherRow("$seriesCount x 100", "$seriesTotal")
+                else ...[
+                  if (sBundleCount > 0)
+                    _buildVoucherRow("$sBundleCount x 120", "$sBundlePrice"),
+                  if (sRemCount > 0)
+                    _buildVoucherRow("$sRemCount x 150", "$sRemPrice"),
+                ],
                 const SizedBox(height: 10),
               ],
 
@@ -436,32 +455,26 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return "${mb.toStringAsFixed(1)} MB";
   }
 
-  // 🌟 ဖုန်း၏ Default Apps / Manage Apps သို့ သေချာပေါက် ပွင့်သွားစေမည့် Function
   Future<void> _openDefaultAppsSettings() async {
     final List<AndroidIntent> candidateIntents = [
-      // ၁။ Xiaomi (MIUI / HyperOS) ၏ Apps > Manage Apps စာမျက်နှာ
       const AndroidIntent(
         action: 'android.intent.action.MAIN',
         package: 'com.miui.securitycenter',
         componentName: 'com.miui.appmanager.AppManagerMainActivity',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
       ),
-      // ၂။ Standard Android Default Apps Settings (Samsung, Vivo, Oppo, Realme စသည်တို့အတွက်)
       const AndroidIntent(
         action: 'android.settings.MANAGE_DEFAULT_APPS_SETTINGS',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
       ),
-      // ၃။ Android Application Settings (Manage Apps)
       const AndroidIntent(
         action: 'android.settings.MANAGE_APPLICATIONS_SETTINGS',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
       ),
-      // ၄။ Android General Apps Settings
       const AndroidIntent(
         action: 'android.settings.APPLICATION_SETTINGS',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
       ),
-      // ၅။ နောက်ဆုံး အရန် Main Settings
       const AndroidIntent(
         action: 'android.settings.SETTINGS',
         flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
@@ -699,7 +712,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                   ),
                   const Divider(color: Color(0xFF30363D), height: 18),
 
-                  // 🌟 Browser, Gallery, Play video Default ရွေးသည့် ခလုတ်
                   const Text(
                     "Default Apps (Video Player / Browser ရွေးရန်):",
                     style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
@@ -874,7 +886,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     );
   }
 
-  // 🌟 Finished ထဲမှ ဖျက်လျှင် ဖုန်း/SD ထဲရှိ မူရင်းဗီဒီယိုဖိုင်ပါ တစ်ခါတည်း အပြီးတိုင် ဖျက်ပေးမည့် စနစ်
   Future<void> _confirmDelete({
     required List<DownloadItem> items,
     required String title,
