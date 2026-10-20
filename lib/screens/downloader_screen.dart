@@ -169,7 +169,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     } catch (_) {}
   }
 
-  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function (10.10.10.10 ရော 192.168.1.50 ပါ Auto စမ်းသပ်စနစ်)
+  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function
   Future<void> _sendPrintJob(BuildContext ctx, String serverUrl, String customer, int mc, int sc) async {
     final List<String> targetServers = [
       serverUrl,
@@ -349,7 +349,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
         actions: [
           Row(
             children: [
-              // 🧾 ဘောက်ချာယူမယ် ခလုတ်
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
@@ -368,7 +367,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              // OK (ပိတ်မည်) ခလုတ်
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -711,7 +709,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     ],
                   ),
                   const Divider(color: Color(0xFF30363D), height: 18),
-
                   const Text(
                     "Default Apps (Video Player / Browser ရွေးရန်):",
                     style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
@@ -740,7 +737,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                       ),
                     ),
                   ),
-
                   const Divider(color: Color(0xFF30363D), height: 18),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -886,6 +882,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     );
   }
 
+  // 🌟 Finished ထဲမှ ဖျက်လျှင် ဖုန်း/SD ထဲရှိ မူရင်းဗီဒီယိုဖိုင်ပါ အပြီးတိုင် ဖျက်ပေးမည့် စနစ်
   Future<void> _confirmDelete({
     required List<DownloadItem> items,
     required String title,
@@ -948,6 +945,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
+  // 🌟 MX Player (Free သို့မဟုတ် Pro) ရှိပါက Chooser Box မတက်ဘဲ တိုက်ရိုက် တန်းဖွင့်ပေးမည့် Function
   Future<void> _openDownloadedFile(DownloadItem item) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
@@ -970,6 +968,34 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final bool isApk = item.name.toLowerCase().endsWith('.apk');
     final mimeType = isApk ? 'application/vnd.android.package-archive' : 'video/*';
 
+    // 🌟 ဗီဒီယိုဖိုင်ဖြစ်ပါက MX Player (Free သို့မဟုတ် Pro) သို့ Chooser Box မတက်ဘဲ တိုက်ရိုက် တန်းဖွင့်ခြင်း
+    if (!isApk) {
+      final mxPackages = [
+        'com.mxtech.videoplayer.ad',   // MX Player Free
+        'com.mxtech.videoplayer.pro',  // MX Player Pro
+      ];
+
+      for (final pkg in mxPackages) {
+        try {
+          final mxIntent = AndroidIntent(
+            action: 'android.intent.action.VIEW',
+            data: Uri.encodeFull('file://${file.path}'),
+            type: mimeType,
+            package: pkg,
+            flags: const <int>[
+              Flag.FLAG_ACTIVITY_NEW_TASK,
+              Flag.FLAG_GRANT_READ_URI_PERMISSION,
+            ],
+          );
+          if (await mxIntent.canResolveActivity() == true) {
+            await mxIntent.launch();
+            return;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 🌟 MX Player မရှိပါက ပုံမှန် MethodChannel သို့မဟုတ် OpenFilex ဖြင့် ဖွင့်မည်
     try {
       const channel = MethodChannel('com.dataplus/storage');
       await channel.invokeMethod('openFile', {
