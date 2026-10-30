@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../services/download_engine.dart';
 import 'downloader_screen.dart';
 
@@ -304,6 +306,21 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           },
         ),
       );
+
+    // 🌟 Web ထဲမှ <input type="file"> (Browse) နှိပ်ပါက ဖုန်း Gallery အလိုအလျောက် ပွင့်စေမည့် Handler
+    if (_controller.platform is AndroidWebViewController) {
+      final androidController = _controller.platform as AndroidWebViewController;
+      androidController.setOnShowFileSelector((FileSelectorParams params) async {
+        try {
+          final picker = ImagePicker();
+          final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
+          if (photo != null) {
+            return [Uri.file(photo.path).toString()];
+          }
+        } catch (_) {}
+        return [];
+      });
+    }
   }
 
   Future<void> _processIncomingDownloadLinks(String payload) async {
