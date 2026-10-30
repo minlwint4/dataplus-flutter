@@ -69,6 +69,8 @@ jobs:
         if [ -f "android/app/build.gradle" ]; then
           sed -i 's/applicationId ".*"/applicationId "com.dataplus.dataplus_app"/g' android/app/build.gradle
           sed -i 's/namespace ".*"/namespace "com.dataplus.dataplus_app"/g' android/app/build.gradle || true
+          sed -i 's/compileSdk = .*/compileSdk = 34/g' android/app/build.gradle || true
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 34/g' android/app/build.gradle || true
         fi
 
         mkdir -p android
@@ -82,9 +84,9 @@ jobs:
         fi
 
         if [ -f "android/build.gradle" ]; then
-          echo "ext.kotlin_version = '1.9.24'" >> android/build.gradle
+          sed -i '1i ext.kotlin_version = "1.9.24"\n' android/build.gradle
         else
-          echo "ext.kotlin_version = '1.9.24'" > android/build.gradle
+          echo 'ext.kotlin_version = "1.9.24"' > android/build.gradle
         fi
 
         mkdir -p android/app/src/main/res/xml
@@ -93,11 +95,12 @@ jobs:
           '<paths xmlns:android="http://schemas.android.com/apk/res/android">' \
           '    <external-path name="external_files" path="." />' \
           '    <external-storage-path name="external_storage" path="." />' \
+          '    <cache-path name="cache" path="." />' \
           '    <root-path name="root" path="." />' \
           '</paths>' > android/app/src/main/res/xml/filepaths.xml
 
         sed -i 's/android:label="[^"]*"/android:label="DATA_PLUS"/g' android/app/src/main/AndroidManifest.xml
-        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
 
         sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>' android/app/src/main/AndroidManifest.xml
@@ -106,6 +109,7 @@ jobs:
         printf '%s\n' \
           'package com.dataplus.dataplus_app' \
           '' \
+          'import android.app.Activity' \
           'import android.content.Intent' \
           'import android.content.ComponentName' \
           'import android.net.Uri' \
@@ -122,10 +126,57 @@ jobs:
           '' \
           'class MainActivity: FlutterActivity() {' \
           '    private val CHANNEL = "com.dataplus/storage"' \
+          '    private var pendingPickResult: MethodChannel.Result? = null' \
+          '    private val PICK_IMAGE_REQ = 9001' \
+          '' \
+          '    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {' \
+          '        super.onActivityResult(requestCode, resultCode, data)' \
+          '        if (requestCode == PICK_IMAGE_REQ) {' \
+          '            val res = pendingPickResult' \
+          '            pendingPickResult = null' \
+          '            if (res != null) {' \
+          '                if (resultCode == Activity.RESULT_OK && data?.data != null) {' \
+          '                    try {' \
+          '                        val uri = data.data!!' \
+          '                        val inputStream = contentResolver.openInputStream(uri)' \
+          '                        val tempFile = File(cacheDir, "req_photo_${System.currentTimeMillis()}.jpg")' \
+          '                        if (inputStream != null) {' \
+          '                            inputStream.use { input ->' \
+          '                                tempFile.outputStream().use { output ->' \
+          '                                    input.copyTo(output)' \
+          '                                }' \
+          '                            }' \
+          '                            res.success(tempFile.absolutePath)' \
+          '                        } else {' \
+          '                            res.success(null)' \
+          '                        }' \
+          '                    } catch (e: Exception) {' \
+          '                        res.success(null)' \
+          '                    }' \
+          '                } else {' \
+          '                    res.success(null)' \
+          '                }' \
+          '            }' \
+          '        }' \
+          '    }' \
+          '' \
           '    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {' \
           '        super.configureFlutterEngine(flutterEngine)' \
           '        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->' \
           '            when (call.method) {' \
+          '                "pickImage" -> {' \
+          '                    try {' \
+          '                        pendingPickResult = result' \
+          '                        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {' \
+          '                            type = "image/*"' \
+          '                            addCategory(Intent.CATEGORY_OPENABLE)' \
+          '                        }' \
+          '                        startActivityForResult(Intent.createChooser(intent, "ဓာတ်ပုံ ရွေးချယ်ပါ"), PICK_IMAGE_REQ)' \
+          '                    } catch (e: Exception) {' \
+          '                        pendingPickResult = null' \
+          '                        result.success(null)' \
+          '                    }' \
+          '                }' \
           '                "keepScreenOn" -> {' \
           '                    try {' \
           '                        val enable = call.argument<Boolean>("enable") ?: true' \
@@ -236,11 +287,17 @@ jobs:
           '    }' \
           '}' > android/app/src/main/kotlin/com/dataplus/dataplus_app/MainActivity.kt
 
-    - name: Install Dependencies & Clear Cache
+    - name: Install Dependencies & Patch Plugin SDK/Kotlin Versions
       run: |
         flutter clean
         flutter pub cache clean -f
         flutter pub get
+
+        # 🌟 Plugin များထဲရှိ Kotlin 1.6 အဟောင်းနှင့် SDK 35 ကန့်သတ်ချက်များကို SDK 34 / Kotlin 1.9.24 သို့ အလိုအလျောက် ပြင်ဆင်ခြင်း
+        find ~/.pub-cache -name "build.gradle" -exec sed -i "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '1.9.24'/g" {} + || true
+        find ~/.pub-cache -name "build.gradle" -exec sed -i 's/compileSdk 35/compileSdk 34/g' {} + || true
+        find ~/.pub-cache -name "build.gradle" -exec sed -i 's/compileSdk = 35/compileSdk = 34/g' {} + || true
+        find ~/.pub-cache -name "build.gradle" -exec sed -i 's/compileSdkVersion 35/compileSdkVersion 34/g' {} + || true
 
     - name: Generate App Launcher Icons
       run: |
