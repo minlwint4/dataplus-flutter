@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   webview_flutter: ^4.10.0
-  webview_flutter_android: ^3.16.9
+  webview_flutter_android: ^4.3.2
   image_picker: ^1.1.2
   path_provider: ^2.1.4
   permission_handler: ^11.3.1
