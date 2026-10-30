@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -32,7 +31,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
   ];
   String _activeBaseUrl = 'http://10.10.10.10:1000';
 
-  // 🌟 Downloader မစစ်ဆေးသော ဘေးကင်းသည့် DataPlus ဖိုဒါ လမ်းကြောင်းများ
   static const String _userNameFilePath = '/storage/emulated/0/Download/DataPlus/user_name.txt';
   static const String _deviceIdFilePath = '/storage/emulated/0/Download/DataPlus/device_id.txt';
   static const String _oldDeviceIdFilePath = '/storage/emulated/0/Download/.Dataplus/.device_id';
@@ -86,7 +84,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
     _controller.loadRequest(Uri.parse('$_activeBaseUrl/'));
   }
 
-  // 🌟 Persistent Device ID ရယူခြင်း (ဖိုင်ဟောင်းကို ဖျက်ပြီး DataPlus ဖိုဒါထဲ အသေပြောင်းသိမ်းခြင်း)
   Future<String> _getPersistentDeviceId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -97,7 +94,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
       final oldFile = File(_oldDeviceIdFilePath);
 
       try {
-        // ၁။ Downloader Finish ထဲ ပေါ်နေစေသော ဖိုင်ဟောင်းရှိပါက ID အရင်ယူပြီး ဖိုင်ဟောင်းကို ဖျက်ပစ်မည်
         if (await oldFile.exists()) {
           final oldContent = (await oldFile.readAsString()).trim();
           if (oldContent.isNotEmpty && (deviceId == null || deviceId.isEmpty)) {
@@ -106,7 +102,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
           try { await oldFile.delete(); } catch (_) {}
         }
 
-        // ၂။ ဘေးကင်းသော ဖိုဒါထဲမှ ID စစ်ဆေးရယူခြင်း
         if (deviceId == null || deviceId.isEmpty) {
           if (await safeFile.exists()) {
             final content = (await safeFile.readAsString()).trim();
@@ -117,13 +112,11 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
         }
       } catch (_) {}
 
-      // ၃။ ID မရှိသေးပါက အသစ် ထုတ်ယူခြင်း
       if (deviceId == null || deviceId.isEmpty) {
         final rand = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
         deviceId = 'dp_${rand}_${DateTime.now().millisecond}';
       }
 
-      // ၄။ SharedPreferences နှင့် Download/DataPlus/device_id.txt ထဲတွင် အသေသိမ်းခြင်း
       await prefs.setString('device_id', deviceId);
       try {
         if (!await safeDir.exists()) {
@@ -215,7 +208,6 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
 
             await _sendStorageToWeb();
 
-            // 🌟 ဘေးကင်းသော Persistent Device ID နှင့် အမည်ကို WebView ထဲသို့ Inject ပြုလုပ်ခြင်း
             final deviceId = await _getPersistentDeviceId();
             final savedName = await _getSavedUserName() ?? '';
 
@@ -307,15 +299,15 @@ class _WebPortalScreenState extends State<WebPortalScreen> {
         ),
       );
 
-    // 🌟 Web ထဲမှ <input type="file"> (Browse) နှိပ်ပါက ဖုန်း Gallery အလိုအလျောက် ပွင့်စေမည့် Handler
+    // 🌟 Web ထဲမှ <input type="file"> (Browse) နှိပ်ပါက Native MethodChannel မှတစ်ဆင့် ဖုန်း Gallery တန်းဖွင့်ပေးခြင်း
     if (_controller.platform is AndroidWebViewController) {
       final androidController = _controller.platform as AndroidWebViewController;
       androidController.setOnShowFileSelector((FileSelectorParams params) async {
         try {
-          final picker = ImagePicker();
-          final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
-          if (photo != null) {
-            return [Uri.file(photo.path).toString()];
+          const channel = MethodChannel('com.dataplus/storage');
+          final String? pickedPath = await channel.invokeMethod<String>('pickImage');
+          if (pickedPath != null && pickedPath.isNotEmpty) {
+            return [Uri.file(pickedPath).toString()];
           }
         } catch (_) {}
         return [];
