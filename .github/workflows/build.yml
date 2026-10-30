@@ -334,6 +334,7 @@ jobs:
     - name: Build APK (Release)
       run: |
         flutter build apk --release \
+          --target-platform android-arm,android-arm64 \
           --build-name=1.0.${{ github.run_number }} \
           --build-number=${{ github.run_number }} \
           --dart-define=APP_VERSION=1.0.${{ github.run_number }}
