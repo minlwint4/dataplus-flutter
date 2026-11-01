@@ -8,7 +8,7 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
 import 'package:video_player/video_player.dart';
 import '../services/download_engine.dart';
-import '../main.dart'; 
+import '../main.dart';
 
 class DownloaderScreen extends StatefulWidget {
   const DownloaderScreen({super.key});
@@ -240,7 +240,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final int mRemPrice = mRemCount * 300;
     final int movieTotal = mBundlePrice + mRemPrice;
 
-    // 🌟 Series ဈေးနှုန်းတွက်ချက်မှု (၄၀ နှင့်အထက် = ၁၀၀ နှုန်း၊ ၄၀ အောက် = ၁၀ ပိုင်း ၁၂၀၀ + ၁ ပိုင်း ၁၅၀)
     final int seriesTotal;
     final int sBundleCount;
     final int sBundlePrice;
@@ -265,7 +264,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     final int grandTotal = movieTotal + seriesTotal;
     final String nowStr = DateTime.now().toString().substring(0, 16);
 
-    // 🌟 ဘောက်ချာပေါ်ချိန်တွင် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံထွက်စေခြင်း
     _playPhoneVoiceSequence(serverUrl, grandTotal);
 
     await showDialog(
@@ -882,7 +880,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     );
   }
 
-  // 🌟 Finished ထဲမှ ဖျက်လျှင် ဖုန်း/SD ထဲရှိ မူရင်းဗီဒီယိုဖိုင်ပါ အပြီးတိုင် ဖျက်ပေးမည့် စနစ်
   Future<void> _confirmDelete({
     required List<DownloadItem> items,
     required String title,
@@ -945,7 +942,26 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  // 🌟 MX Player (Free သို့မဟုတ် Pro) ရှိပါက Chooser Box မတက်ဘဲ တိုက်ရိုက် တန်းဖွင့်ပေးမည့် Function
+  // 🌟 ပြင်ပ Player (MX Player / VLC / System) ဖြင့် ဖွင့်ရန် Function
+  static Future<void> openInExternalPlayer(BuildContext context, File file) async {
+    final bool isApk = file.path.toLowerCase().endsWith('.apk');
+    final mimeType = isApk ? 'application/vnd.android.package-archive' : 'video/*';
+
+    try {
+      const channel = MethodChannel('com.dataplus/storage');
+      await channel.invokeMethod('openFile', {
+        'path': file.path,
+        'mimeType': mimeType,
+      });
+    } catch (_) {
+      final result = await OpenFilex.open(file.path, type: mimeType);
+      if (result.type != ResultType.done && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ ${result.message}')));
+      }
+    }
+  }
+
+  // 🌟 ဗီဒီယိုဖိုင်ဖြစ်ပါက DATA PLUS Built-in MX Style Player ဖြင့် ချက်ချင်း တန်းဖွင့်ပေးမည်
   Future<void> _openDownloadedFile(DownloadItem item) async {
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
@@ -966,48 +982,22 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
 
     final bool isApk = item.name.toLowerCase().endsWith('.apk');
-    final mimeType = isApk ? 'application/vnd.android.package-archive' : 'video/*';
 
-    // 🌟 ဗီဒီယိုဖိုင်ဖြစ်ပါက MX Player (Free သို့မဟုတ် Pro) သို့ Chooser Box မတက်ဘဲ တိုက်ရိုက် တန်းဖွင့်ခြင်း
-    if (!isApk) {
-      final mxPackages = [
-        'com.mxtech.videoplayer.ad',   // MX Player Free
-        'com.mxtech.videoplayer.pro',  // MX Player Pro
-      ];
-
-      for (final pkg in mxPackages) {
-        try {
-          final mxIntent = AndroidIntent(
-            action: 'android.intent.action.VIEW',
-            data: Uri.encodeFull('file://${file.path}'),
-            type: mimeType,
-            package: pkg,
-            flags: const <int>[
-              Flag.FLAG_ACTIVITY_NEW_TASK,
-              Flag.FLAG_GRANT_READ_URI_PERMISSION,
-            ],
-          );
-          if (await mxIntent.canResolveActivity() == true) {
-            await mxIntent.launch();
-            return;
-          }
-        } catch (_) {}
-      }
+    if (isApk) {
+      await openInExternalPlayer(context, file);
+      return;
     }
 
-    // 🌟 MX Player မရှိပါက ပုံမှန် MethodChannel သို့မဟုတ် OpenFilex ဖြင့် ဖွင့်မည်
-    try {
-      const channel = MethodChannel('com.dataplus/storage');
-      await channel.invokeMethod('openFile', {
-        'path': file.path,
-        'mimeType': mimeType,
-      });
-    } catch (_) {
-      final result = await OpenFilex.open(file.path, type: mimeType);
-      if (result.type != ResultType.done && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ ${result.message}')));
-      }
-    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DataPlusVideoPlayerScreen(
+          file: file,
+          title: item.name,
+        ),
+      ),
+    );
+    _updateOrientations(currentTab);
   }
 
   @override
@@ -1487,6 +1477,630 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+// ============================================================================
+// 🎬 DATA PLUS BUILT-IN MX PLAYER STYLE VIDEO PLAYER
+// ============================================================================
+class DataPlusVideoPlayerScreen extends StatefulWidget {
+  final File file;
+  final String title;
+
+  const DataPlusVideoPlayerScreen({
+    super.key,
+    required this.file,
+    required this.title,
+  });
+
+  static final Map<String, Duration> _savedPositions = {};
+
+  @override
+  State<DataPlusVideoPlayerScreen> createState() => _DataPlusVideoPlayerScreenState();
+}
+
+class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+  bool _hasError = false;
+  String _errorText = '';
+
+  bool _showControls = true;
+  bool _isLocked = false;
+  bool _isLandscape = true;
+  Timer? _hideTimer;
+
+  // Aspect Ratio Modes: 0 = Fit, 1 = Stretch (Fill), 2 = Zoom (Cover)
+  int _aspectMode = 0;
+  double _playbackSpeed = 1.0;
+
+  // Gesture states
+  double _volume = 1.0;
+  double _brightness = 1.0;
+  String? _centerHudText;
+  IconData? _centerHudIcon;
+  Timer? _hudTimer;
+
+  Duration? _dragSeekTarget;
+
+  @override
+  void initState() {
+    super.initState();
+    _enterFullscreenLandscape();
+    _setKeepScreenOn(true);
+    _initVideo();
+  }
+
+  Future<void> _setKeepScreenOn(bool enable) async {
+    try {
+      const channel = MethodChannel('com.dataplus/storage');
+      await channel.invokeMethod('keepScreenOn', {'enable': enable});
+    } catch (_) {}
+  }
+
+  void _enterFullscreenLandscape() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  void _toggleOrientation() {
+    setState(() {
+      _isLandscape = !_isLandscape;
+    });
+    if (_isLandscape) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+    }
+    _startHideTimer();
+  }
+
+  Future<void> _initVideo() async {
+    _controller = VideoPlayerController.file(widget.file);
+    try {
+      await _controller.initialize();
+      final savedPos = DataPlusVideoPlayerScreen._savedPositions[widget.file.path];
+      if (savedPos != null && savedPos < _controller.value.duration - const Duration(seconds: 5)) {
+        await _controller.seekTo(savedPos);
+        _showHud(Icons.restore, "ကြည့်လက်စမှ ပြန်ဖွင့်သည် (${_formatDuration(savedPos)})");
+      }
+      await _controller.setVolume(_volume);
+      await _controller.play();
+      _controller.addListener(_onControllerUpdate);
+
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+        _startHideTimer();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _errorText = e.toString();
+        });
+      }
+    }
+  }
+
+  void _onControllerUpdate() {
+    if (!mounted) return;
+    if (_controller.value.isInitialized) {
+      DataPlusVideoPlayerScreen._savedPositions[widget.file.path] = _controller.value.position;
+    }
+    setState(() {});
+  }
+
+  void _startHideTimer() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _controller.value.isPlaying) {
+        setState(() {
+          _showControls = false;
+        });
+      }
+    });
+  }
+
+  void _toggleControls() {
+    setState(() {
+      _showControls = !_showControls;
+    });
+    if (_showControls) {
+      _startHideTimer();
+    }
+  }
+
+  void _showHud(IconData icon, String text) {
+    _hudTimer?.cancel();
+    setState(() {
+      _centerHudIcon = icon;
+      _centerHudText = text;
+    });
+    _hudTimer = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) {
+        setState(() {
+          _centerHudText = null;
+          _centerHudIcon = null;
+        });
+      }
+    });
+  }
+
+  void _seekRelative(Duration offset) {
+    if (!_isInitialized) return;
+    final current = _controller.value.position;
+    final total = _controller.value.duration;
+    var target = current + offset;
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > total) target = total;
+    _controller.seekTo(target);
+    _showHud(
+      offset.isNegative ? Icons.replay_10_rounded : Icons.forward_10_rounded,
+      "${offset.isNegative ? '-10s' : '+10s'} (${_formatDuration(target)})",
+    );
+    _startHideTimer();
+  }
+
+  void _cycleAspectRatio() {
+    setState(() {
+      _aspectMode = (_aspectMode + 1) % 3;
+    });
+    final labels = ['မူရင်းအချိုး (Fit)', 'မျက်နှာပြင်အပြည့် (Stretch)', 'အနားဖြတ်အပြည့် (Zoom)'];
+    _showHud(Icons.aspect_ratio_rounded, labels[_aspectMode]);
+    _startHideTimer();
+  }
+
+  void _cycleSpeed() {
+    final speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
+    final nextIdx = (speeds.indexOf(_playbackSpeed) + 1) % speeds.length;
+    _playbackSpeed = speeds[nextIdx];
+    _controller.setPlaybackSpeed(_playbackSpeed);
+    _showHud(Icons.speed_rounded, "အမြန်နှုန်း ${_playbackSpeed}x");
+    _startHideTimer();
+  }
+
+  String _formatDuration(Duration d) {
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    if (hours > 0) {
+      return "$hours:$minutes:$seconds";
+    }
+    return "$minutes:$seconds";
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    _hudTimer?.cancel();
+    _controller.removeListener(_onControllerUpdate);
+    _controller.dispose();
+    _setKeepScreenOn(false);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
+  Widget _buildVideoSurface() {
+    final videoWidth = _controller.value.size.width;
+    final videoHeight = _controller.value.size.height;
+
+    if (_aspectMode == 1) {
+      // Stretch to fill entire screen
+      return SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.fill,
+          child: SizedBox(
+            width: videoWidth,
+            height: videoHeight,
+            child: VideoPlayer(_controller),
+          ),
+        ),
+      );
+    } else if (_aspectMode == 2) {
+      // Zoom / Cover
+      return SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: videoWidth,
+            height: videoHeight,
+            child: VideoPlayer(_controller),
+          ),
+        ),
+      );
+    }
+
+    // Default Fit
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _controller.value.aspectRatio,
+        child: VideoPlayer(_controller),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Video Layer
+          if (_isInitialized)
+            _buildVideoSurface()
+          else if (_hasError)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.orangeAccent, size: 48),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "ဤဗီဒီယို Format ကို ပြင်ပ Player ဖြင့် ဖွင့်ရန် လိုအပ်ပါသည်",
+                      style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _errorText,
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F6FEB)),
+                      onPressed: () {
+                        _DownloaderScreenState.openInExternalPlayer(context, widget.file);
+                      },
+                      icon: const Icon(Icons.open_in_new, color: Colors.white),
+                      label: const Text("MX / ပြင်ပ Player ဖြင့် ဖွင့်မည်", style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            const Center(
+              child: CircularProgressIndicator(color: Color(0xFF00E676)),
+            ),
+
+          // 2. Brightness Dimming Overlay (MX Style)
+          if (_brightness < 1.0)
+            IgnorePointer(
+              child: Container(
+                color: Colors.black.withOpacity(((1.0 - _brightness) * 0.82).clamp(0.0, 0.82)),
+              ),
+            ),
+
+          // 3. MX Player Touch Gesture Layer
+          if (_isInitialized)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _toggleControls,
+              onDoubleTapDown: (details) {
+                if (_isLocked) return;
+                final dx = details.localPosition.dx;
+                if (dx < size.width * 0.4) {
+                  _seekRelative(const Duration(seconds: -10));
+                } else if (dx > size.width * 0.6) {
+                  _seekRelative(const Duration(seconds: 10));
+                } else {
+                  if (_controller.value.isPlaying) {
+                    _controller.pause();
+                    _showHud(Icons.pause_rounded, "ခေတ္တရပ်ထားသည်");
+                  } else {
+                    _controller.play();
+                    _showHud(Icons.play_arrow_rounded, "ဆက်ဖွင့်နေသည်");
+                  }
+                }
+              },
+              onVerticalDragUpdate: (details) {
+                if (_isLocked) return;
+                final delta = -details.primaryDelta! / (size.height * 0.65);
+                final isLeftSide = details.localPosition.dx < size.width / 2;
+                if (isLeftSide) {
+                  _brightness = (_brightness + delta).clamp(0.05, 1.0);
+                  _showHud(Icons.brightness_6_rounded, "အလင်းအမှောင်: ${(_brightness * 100).round()}%");
+                } else {
+                  _volume = (_volume + delta).clamp(0.0, 1.0);
+                  _controller.setVolume(_volume);
+                  _showHud(
+                    _volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                    "အသံ: ${(_volume * 100).round()}%",
+                  );
+                }
+              },
+              onHorizontalDragStart: (_) {
+                if (_isLocked) return;
+                _dragSeekTarget = _controller.value.position;
+              },
+              onHorizontalDragUpdate: (details) {
+                if (_isLocked || _dragSeekTarget == null) return;
+                final totalSec = _controller.value.duration.inSeconds;
+                final seekDeltaSec = (details.primaryDelta! / size.width) * (totalSec > 600 ? 180 : 90);
+                final nextMillis = (_dragSeekTarget!.inMilliseconds + (seekDeltaSec * 1000).round())
+                    .clamp(0, _controller.value.duration.inMilliseconds);
+                _dragSeekTarget = Duration(milliseconds: nextMillis);
+                _showHud(
+                  Icons.fast_forward_rounded,
+                  "${_formatDuration(_dragSeekTarget!)} / ${_formatDuration(_controller.value.duration)}",
+                );
+              },
+              onHorizontalDragEnd: (_) {
+                if (_isLocked || _dragSeekTarget == null) return;
+                _controller.seekTo(_dragSeekTarget!);
+                _dragSeekTarget = null;
+                _startHideTimer();
+              },
+              child: const SizedBox.expand(),
+            ),
+
+          // 4. Center HUD Indicator (Volume / Brightness / Seek)
+          if (_centerHudText != null)
+            Center(
+              child: IgnorePointer(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_centerHudIcon != null)
+                        Icon(_centerHudIcon, color: const Color(0xFF00E676), size: 34),
+                      const SizedBox(height: 6),
+                      Text(
+                        _centerHudText!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // 5. Locked Mode Floating Unlock Button
+          if (_isLocked && _showControls)
+            Positioned(
+              left: 24,
+              top: 24,
+              child: SafeArea(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black87,
+                    side: const BorderSide(color: Color(0xFF00E676), width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isLocked = false;
+                    });
+                    _showHud(Icons.lock_open_rounded, "သော့ပြန်ဖွင့်ပြီး");
+                    _startHideTimer();
+                  },
+                  icon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF00E676), size: 20),
+                  label: const Text("သော့ဖွင့်ရန် နှိပ်ပါ", style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+              ),
+            ),
+
+          // 6. Full MX Player Top & Bottom Controls
+          if (!_isLocked && _showControls && _isInitialized) ...[
+            // Top Bar
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.black87, Colors.transparent],
+                  ),
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _cycleSpeed,
+                        icon: const Icon(Icons.speed, color: Color(0xFF00E676), size: 18),
+                        label: Text(
+                          "${_playbackSpeed}x",
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _toggleOrientation,
+                        tooltip: "မျက်နှာပြင် လှည့်မည်",
+                        icon: const Icon(Icons.screen_rotation_rounded, color: Colors.white, size: 20),
+                      ),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.white12,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        onPressed: () {
+                          _controller.pause();
+                          _DownloaderScreenState.openInExternalPlayer(context, widget.file);
+                        },
+                        icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF58A6FF), size: 15),
+                        label: const Text(
+                          "MX ဖြင့်ဖွင့်",
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Bottom Control Bar
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 16, 14, 10),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Colors.black87, Colors.transparent],
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Progress Slider Row
+                      Row(
+                        children: [
+                          Text(
+                            _formatDuration(_controller.value.position),
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 3.5,
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                                activeTrackColor: const Color(0xFF00E676),
+                                inactiveTrackColor: Colors.white24,
+                                thumbColor: const Color(0xFF00E676),
+                              ),
+                              child: Slider(
+                                value: _controller.value.position.inMilliseconds
+                                    .toDouble()
+                                    .clamp(0.0, _controller.value.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity)),
+                                min: 0.0,
+                                max: _controller.value.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity),
+                                onChanged: (val) {
+                                  _controller.seekTo(Duration(milliseconds: val.round()));
+                                  _startHideTimer();
+                                },
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _formatDuration(_controller.value.duration),
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ],
+                      ),
+
+                      // MX Style Action Buttons Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _isLocked = true;
+                              });
+                              _showHud(Icons.lock_rounded, "မျက်နှာပြင် သော့ခတ်ထားသည်");
+                            },
+                            tooltip: "Lock Screen",
+                            icon: const Icon(Icons.lock_open_rounded, color: Colors.white),
+                          ),
+                          Row(
+                            children: [
+                              IconButton(
+                                onPressed: () => _seekRelative(const Duration(seconds: -10)),
+                                icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 30),
+                              ),
+                              const SizedBox(width: 12),
+                              InkWell(
+                                onTap: () {
+                                  if (_controller.value.isPlaying) {
+                                    _controller.pause();
+                                  } else {
+                                    _controller.play();
+                                  }
+                                  _startHideTimer();
+                                },
+                                borderRadius: BorderRadius.circular(30),
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF00E676),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _controller.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                    color: Colors.black,
+                                    size: 30,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              IconButton(
+                                onPressed: () => _seekRelative(const Duration(seconds: 10)),
+                                icon: const Icon(Icons.forward_10_rounded, color: Colors.white, size: 30),
+                              ),
+                            ],
+                          ),
+                          IconButton(
+                            onPressed: _cycleAspectRatio,
+                            tooltip: "Aspect Ratio",
+                            icon: const Icon(Icons.aspect_ratio_rounded, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
