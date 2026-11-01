@@ -1,568 +1,430 @@
-import 'dart:async';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+name: Build Flutter APK
 
-class DownloadItem {
-  final String url;
-  final String name;
-  String status;
-  double progress;
-  int sizeBytes;
-  String speed;
-  String eta;
-  String date;
-  String savePath;
-  bool isPaused = false;
-  bool isCanceled = false;
-  bool isSelected = false;
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
 
-  DownloadItem({
-    required this.url,
-    required this.name,
-    this.status = 'queued',
-    this.progress = 0.0,
-    this.sizeBytes = 0,
-    this.speed = '0.0 MB/s',
-    this.eta = '--:--',
-    required this.date,
-    this.savePath = '',
-  });
-}
+permissions:
+  contents: write
 
-class DownloadEngine extends ChangeNotifier {
-  static final DownloadEngine _instance = DownloadEngine._internal();
-  factory DownloadEngine() => _instance;
-  DownloadEngine._internal() {
-    updateStorageInfo();
-  }
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-  static const String internalDownloadPath = '/storage/emulated/0/Download/.Dataplus';
-  String sdDownloadPath = '';
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-  String storageTarget = 'internal';
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
 
-  final List<DownloadItem> downloads = [];
-  bool isDownloading = false;
-
-  final ValueNotifier<String> activeTab = ValueNotifier<String>('Queue');
-  VoidCallback? onAllDownloadsFinished;
-
-  int freeStorageBytes = 0;
-  int totalStorageBytes = 0;
-
-  bool isSdAvailable = false;
-  int freeSdBytes = 0;
-  int totalSdBytes = 0;
-
-  String get currentActivePath {
-    if (storageTarget == 'sdcard' && isSdAvailable && sdDownloadPath.isNotEmpty) {
-      return '$sdDownloadPath/Download/.Dataplus';
-    }
-    return internalDownloadPath;
-  }
-
-  // 🌟 Native Android FLAG_KEEP_SCREEN_ON သို့ လှမ်းခေါ်ပြီး Screen မပိတ်အောင် ထိန်းခြင်း
-  Future<void> _setKeepScreenOn(bool enable) async {
-    try {
-      const channel = MethodChannel('com.dataplus/storage');
-      await channel.invokeMethod('keepScreenOn', {'enable': enable});
-    } catch (_) {}
-  }
-
-  Future<void> _ensureDirectoryAndNoMedia(String path) async {
-    final dir = Directory(path);
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    final noMedia = File('${dir.path}/.nomedia');
-    if (!await noMedia.exists()) {
-      try { await noMedia.create(); } catch (_) {}
-    }
-  }
-
-  Future<void> updateStorageInfo() async {
-    try {
-      const channel = MethodChannel('com.dataplus/storage');
-      final res = await channel.invokeMethod<Map>('getStorageSpace');
-      if (res != null) {
-        totalStorageBytes = res['total'] ?? 0;
-        freeStorageBytes = res['free'] ?? 0;
-
-        isSdAvailable = res['sdAvailable'] ?? false;
-        totalSdBytes = res['sdTotal'] ?? 0;
-        freeSdBytes = res['sdFree'] ?? 0;
-        sdDownloadPath = res['sdPath'] ?? '';
-
-        if (storageTarget == 'sdcard' && !isSdAvailable) {
-          storageTarget = 'internal';
-        }
-
-        await _ensureDirectoryAndNoMedia(currentActivePath);
-        await _scanLocalFiles();
-        notifyListeners();
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _scanLocalFiles() async {
-    final paths = [internalDownloadPath];
-    if (isSdAvailable && sdDownloadPath.isNotEmpty) {
-      paths.add('$sdDownloadPath/Download/.Dataplus');
-    }
-
-    bool hasNew = false;
-    for (var path in paths) {
-      final dir = Directory(path);
-      if (await dir.exists()) {
-        final files = dir.listSync();
-        for (var f in files) {
-          if (f is File) {
-            final name = f.path.split('/').last;
-            // 🌟 .device_id သို့မဟုတ် hidden/temp ဖိုင်များကို Finish စာရင်းထဲ မထည့်ပါ
-            if (name.startsWith('.') || name == '.nomedia' || name.endsWith('.tmp') || name.contains('.part')) {
-              continue;
+    - name: Configure Maven Central Mirror
+      run: |
+        mkdir -p ~/.gradle/init.d
+        cat << 'EOF' > ~/.gradle/init.d/mirror.init.gradle
+        def mirrorUrl = "https://maven-central.storage-download.googleapis.com/maven2/"
+        allprojects {
+            buildscript {
+                repositories {
+                    all { ArtifactRepository repo ->
+                        if (repo instanceof MavenArtifactRepository) {
+                            def url = repo.url.toString()
+                            if (url.contains("repo.maven.apache.org") || url.contains("repo1.maven.org")) {
+                                repo.setUrl(mirrorUrl)
+                            }
+                        }
+                    }
+                }
             }
-
-            if (!downloads.any((d) => d.name == name && d.status == 'finished')) {
-              final stat = f.statSync();
-              downloads.add(DownloadItem(
-                url: 'local_file',
-                name: name,
-                status: 'finished',
-                progress: 1.0,
-                sizeBytes: stat.size,
-                speed: 'COMPLETE ✅',
-                date: "${stat.modified.hour}:${stat.modified.minute.toString().padLeft(2, '0')}",
-                savePath: path,
-              ));
-              hasNew = true;
+            repositories {
+                all { ArtifactRepository repo ->
+                    if (repo instanceof MavenArtifactRepository) {
+                        def url = repo.url.toString()
+                        if (url.contains("repo.maven.apache.org") || url.contains("repo1.maven.org")) {
+                            repo.setUrl(mirrorUrl)
+                        }
+                    }
+                }
             }
-          }
         }
-      }
-    }
-    if (hasNew) notifyListeners();
-  }
+        EOF
 
-  Future<void> setStorageTarget(String target) async {
-    if (target == 'sdcard' && !isSdAvailable) return;
-    storageTarget = target;
-    
-    await _ensureDirectoryAndNoMedia(currentActivePath);
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        channel: 'stable'
+        cache: true
 
-    for (var item in downloads) {
-      if (item.status == 'queued' || item.status == 'paused') {
-        item.savePath = currentActivePath;
-      }
-    }
-    notifyListeners();
-  }
+    - name: Configure Android Project & Permissions
+      run: |
+        echo "Generating fresh Android Project structure..."
+        rm -rf android
+        flutter create . --org com.dataplus --project-name dataplus_app
 
-  int get totalQueuedBytes {
-    return downloads
-        .where((d) => d.status != 'finished')
-        .fold(0, (sum, item) => sum + item.sizeBytes);
-  }
+        if [ -f "android/app/build.gradle" ]; then
+          sed -i 's/applicationId ".*"/applicationId "com.dataplus.dataplus_app"/g' android/app/build.gradle
+          sed -i 's/namespace ".*"/namespace "com.dataplus.dataplus_app"/g' android/app/build.gradle || true
+          sed -i 's/compileSdk = .*/compileSdk = 34/g' android/app/build.gradle || true
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 34/g' android/app/build.gradle || true
+        fi
 
-  bool get isStorageLow {
-    final activeFree = (storageTarget == 'sdcard' && isSdAvailable) ? freeSdBytes : freeStorageBytes;
-    return totalQueuedBytes > activeFree && totalQueuedBytes > 0;
-  }
+        mkdir -p android
+        echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+        echo "flutter.buildMode=release" >> android/local.properties
+        echo "flutter.versionName=1.0.0" >> android/local.properties
+        echo "flutter.versionCode=1" >> android/local.properties
 
-  void addUrls(List<String> urls) {
-    bool added = false;
-    for (var u in urls) {
-      final cleanUrl = u.trim();
-      if (cleanUrl.startsWith('http') && !downloads.any((d) => d.url == cleanUrl)) {
-        String filename = '';
-        final uri = Uri.parse(cleanUrl);
+        if [ -f "android/settings.gradle" ]; then
+          sed -i 's/org.jetbrains.kotlin.android" version "[^"]*"/org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle
+        fi
 
-        if (uri.path.contains('/api/download/apk')) {
-          final appName = uri.queryParameters['app'] ?? 'dataplus';
-          filename = "$appName.apk";
-        } else {
-          filename = Uri.decodeComponent(cleanUrl.split('/').last.split('?').first);
-        }
+        if [ -f "android/build.gradle" ]; then
+          sed -i '1i ext.kotlin_version = "1.9.24"\n' android/build.gradle
+        else
+          echo 'ext.kotlin_version = "1.9.24"' > android/build.gradle
+        fi
 
-        if (filename.isEmpty || filename == 'apk') {
-          filename = "file_${DateTime.now().millisecondsSinceEpoch}.mp4";
-        }
+        mkdir -p android/app/src/main/res/xml
+        printf '%s\n' \
+          '<?xml version="1.0" encoding="utf-8"?>' \
+          '<paths xmlns:android="http://schemas.android.com/apk/res/android">' \
+          '    <external-path name="external_files" path="." />' \
+          '    <external-storage-path name="external_storage" path="." />' \
+          '    <cache-path name="cache" path="." />' \
+          '    <root-path name="root" path="." />' \
+          '</paths>' > android/app/src/main/res/xml/filepaths.xml
 
-        downloads.add(DownloadItem(
-          url: cleanUrl,
-          name: filename,
-          date: "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}",
-          savePath: currentActivePath,
-        ));
-        added = true;
-      }
-    }
-    if (added) {
-      activeTab.value = 'Queue';
-      _fetchSizes();
-      notifyListeners();
-    }
-  }
+        sed -i 's/android:label="[^"]*"/android:label="DATA_PLUS"/g' android/app/src/main/AndroidManifest.xml
+        
+        # 🌟 Background Service & Notifications Permissions
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>' android/app/src/main/AndroidManifest.xml
+        sed -i 's/<application/<application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml
 
-  void startAllQueued() {
-    for (var item in downloads) {
-      if (item.status == 'paused' || item.status == 'error') {
-        item.status = 'queued';
-        item.isPaused = false;
-        item.speed = '0.0 MB/s';
-      }
-    }
-    notifyListeners();
-    if (!isDownloading) {
-      _startWorker();
-    }
-  }
+        # 🌟 FileProvider & DownloadForegroundService Registration
+        sed -i '/<\/application>/i \        <provider\n            android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.fileProvider"\n            android:exported="false"\n            android:grantUriPermissions="true">\n            <meta-data\n                android:name="android.support.FILE_PROVIDER_PATHS"\n                android:resource="@xml/filepaths" \/>\n        <\/provider>\n        <service\n            android:name=".DownloadForegroundService"\n            android:foregroundServiceType="dataSync"\n            android:exported="false" \/>' android/app/src/main/AndroidManifest.xml
 
-  void pauseAll() {
-    for (var item in downloads) {
-      if (item.status == 'downloading' || item.status == 'queued') {
-        item.status = 'paused';
-        item.isPaused = true;
-        item.speed = 'Paused';
-      }
-    }
-    _setKeepScreenOn(false);
-    notifyListeners();
-  }
+        mkdir -p android/app/src/main/kotlin/com/dataplus/dataplus_app
+        printf '%s\n' \
+          'package com.dataplus.dataplus_app' \
+          '' \
+          'import android.app.Activity' \
+          'import android.app.Notification' \
+          'import android.app.NotificationChannel' \
+          'import android.app.NotificationManager' \
+          'import android.app.Service' \
+          'import android.content.Context' \
+          'import android.content.Intent' \
+          'import android.content.ComponentName' \
+          'import android.net.Uri' \
+          'import android.net.wifi.WifiManager' \
+          'import android.os.Build' \
+          'import android.os.Environment' \
+          'import android.os.IBinder' \
+          'import android.os.PowerManager' \
+          'import android.os.StatFs' \
+          'import android.provider.Settings' \
+          'import android.view.WindowManager' \
+          'import androidx.core.app.NotificationCompat' \
+          'import androidx.core.content.FileProvider' \
+          'import java.io.File' \
+          'import io.flutter.embedding.android.FlutterActivity' \
+          'import io.flutter.embedding.engine.FlutterEngine' \
+          'import io.flutter.plugin.common.MethodChannel' \
+          '' \
+          'class DownloadForegroundService : Service() {' \
+          '    companion object {' \
+          '        const val CHANNEL_ID = "dataplus_downloads"' \
+          '        const val NOTIF_ID = 2024' \
+          '        var isRunning = false' \
+          '    }' \
+          '    private var wakeLock: PowerManager.WakeLock? = null' \
+          '    private var wifiLock: WifiManager.WifiLock? = null' \
+          '' \
+          '    override fun onCreate() {' \
+          '        super.onCreate() { }' \
+          '        createChannel()' \
+          '        try {' \
+          '            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager' \
+          '            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DataPlus:DownloaderWakeLock").apply {' \
+          '                setReferenceCounted(false)' \
+          '                acquire(10 * 60 * 1000L * 60)' \
+          '            }' \
+          '            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager' \
+          '            wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "DataPlus:DownloaderWifiLock").apply {' \
+          '                setReferenceCounted(false)' \
+          '                acquire()' \
+          '            }' \
+          '        } catch (_: Exception) {}' \
+          '    }' \
+          '' \
+          '    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {' \
+          '        val title = intent?.getStringExtra("title") ?: "DATA PLUS"' \
+          '        val desc = intent?.getStringExtra("desc") ?: "ဖိုင်များ ဒေါင်းလုဒ်ဆွဲနေပါသည်..."' \
+          '        val notif = NotificationCompat.Builder(this, CHANNEL_ID)' \
+          '            .setContentTitle(title)' \
+          '            .setContentText(desc)' \
+          '            .setSmallIcon(android.R.drawable.stat_sys_download)' \
+          '            .setOngoing(true)' \
+          '            .setPriority(NotificationCompat.PRIORITY_LOW)' \
+          '            .build()' \
+          '        startForeground(NOTIF_ID, notif)' \
+          '        isRunning = true' \
+          '        return START_NOT_STICKY' \
+          '    }' \
+          '' \
+          '    override fun onDestroy() {' \
+          '        isRunning = false' \
+          '        try {' \
+          '            wakeLock?.let { if (it.isHeld) it.release() }' \
+          '            wifiLock?.let { if (it.isHeld) it.release() }' \
+          '        } catch (_: Exception) {}' \
+          '        super.onDestroy()' \
+          '    }' \
+          '' \
+          '    override fun onBind(intent: Intent?): IBinder? = null' \
+          '' \
+          '    private fun createChannel() {' \
+          '        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {' \
+          '            val ch = NotificationChannel(CHANNEL_ID, "DATA PLUS Background Download", NotificationManager.IMPORTANCE_LOW)' \
+          '            ch.description = "Download Service Notification"' \
+          '            val nm = getSystemService(NotificationManager::class.java)' \
+          '            nm?.createNotificationChannel(ch)' \
+          '        }' \
+          '    }' \
+          '}' \
+          '' \
+          'class MainActivity: FlutterActivity() {' \
+          '    private val CHANNEL = "com.dataplus/storage"' \
+          '    private var pendingPickResult: MethodChannel.Result? = null' \
+          '    private val PICK_IMAGE_REQ = 9001' \
+          '' \
+          '    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {' \
+          '        super.onActivityResult(requestCode, resultCode, data)' \
+          '        if (requestCode == PICK_IMAGE_REQ) {' \
+          '            val res = pendingPickResult' \
+          '            pendingPickResult = null' \
+          '            if (res != null) {' \
+          '                if (resultCode == Activity.RESULT_OK && data?.data != null) {' \
+          '                    try {' \
+          '                        val uri = data.data!!' \
+          '                        val inputStream = contentResolver.openInputStream(uri)' \
+          '                        val tempFile = File(cacheDir, "req_photo_${System.currentTimeMillis()}.jpg")' \
+          '                        if (inputStream != null) {' \
+          '                            inputStream.use { input ->' \
+          '                                tempFile.outputStream().use { output -> input.copyTo(output) }' \
+          '                            }' \
+          '                            res.success(tempFile.absolutePath)' \
+          '                        } else { res.success(null) }' \
+          '                    } catch (e: Exception) { res.success(null) }' \
+          '                } else { res.success(null) }' \
+          '            }' \
+          '        }' \
+          '    }' \
+          '' \
+          '    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {' \
+          '        super.configureFlutterEngine(flutterEngine)' \
+          '        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->' \
+          '            when (call.method) {' \
+          '                "startDownloadService" -> {' \
+          '                    try {' \
+          '                        val title = call.argument<String>("title") ?: "DATA PLUS"' \
+          '                        val desc = call.argument<String>("desc") ?: "ဖိုင်များ ဒေါင်းလုဒ်ဆွဲနေပါသည်..."' \
+          '                        val intent = Intent(this, DownloadForegroundService::class.java).apply {' \
+          '                            putExtra("title", title)' \
+          '                            putExtra("desc", desc)' \
+          '                        }' \
+          '                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {' \
+          '                            startForegroundService(intent)' \
+          '                        } else { startService(intent) }' \
+          '                        result.success(true)' \
+          '                    } catch (e: Exception) { result.error("ERROR", e.message, null) }' \
+          '                }' \
+          '                "stopDownloadService" -> {' \
+          '                    try {' \
+          '                        val intent = Intent(this, DownloadForegroundService::class.java)' \
+          '                        stopService(intent)' \
+          '                        result.success(true)' \
+          '                    } catch (e: Exception) { result.error("ERROR", e.message, null) }' \
+          '                }' \
+          '                "pickImage" -> {' \
+          '                    try {' \
+          '                        pendingPickResult = result' \
+          '                        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {' \
+          '                            type = "image/*"' \
+          '                            addCategory(Intent.CATEGORY_OPENABLE)' \
+          '                        }' \
+          '                        startActivityForResult(Intent.createChooser(intent, "ဓာတ်ပုံ ရွေးချယ်ပါ"), PICK_IMAGE_REQ)' \
+          '                    } catch (e: Exception) {' \
+          '                        pendingPickResult = null' \
+          '                        result.success(null)' \
+          '                    }' \
+          '                }' \
+          '                "keepScreenOn" -> {' \
+          '                    try {' \
+          '                        val enable = call.argument<Boolean>("enable") ?: true' \
+          '                        runOnUiThread {' \
+          '                            if (enable) {' \
+          '                                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)' \
+          '                            } else {' \
+          '                                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)' \
+          '                            }' \
+          '                        }' \
+          '                        result.success(true)' \
+          '                    } catch (e: Exception) {' \
+          '                        result.error("ERROR", e.message, null)' \
+          '                    }' \
+          '                }' \
+          '                "openDefaultApps" -> {' \
+          '                    val intents = listOf(' \
+          '                        Intent().setComponent(ComponentName("com.android.settings", "com.android.settings.applications.PreferredActivitySettings")),' \
+          '                        Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"),' \
+          '                        Intent("android.intent.action.MAIN").setComponent(ComponentName("com.android.settings", "com.android.settings.SubSettings")).putExtra(":settings:show_fragment", "com.android.settings.applications.PreferredListSettings"),' \
+          '                        Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.appmanager.AppManagerMainActivity")),' \
+          '                        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),' \
+          '                        Intent(Settings.ACTION_APPLICATION_SETTINGS)' \
+          '                    )' \
+          '                    var opened = false' \
+          '                    for (targetIntent in intents) {' \
+          '                        try {' \
+          '                            targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)' \
+          '                            startActivity(targetIntent)' \
+          '                            opened = true' \
+          '                            break' \
+          '                        } catch (e: Exception) {}' \
+          '                    }' \
+          '                    if (opened) {' \
+          '                        result.success(true)' \
+          '                    } else {' \
+          '                        result.error("ERROR", "Cannot open default apps", null)' \
+          '                    }' \
+          '                }' \
+          '                "getStorageSpace" -> {' \
+          '                    try {' \
+          '                        val map = HashMap<String, Any>()' \
+          '                        val internalPath = Environment.getExternalStorageDirectory()' \
+          '                        val internalStat = StatFs(internalPath.path)' \
+          '                        val intBlockSize = internalStat.blockSizeLong' \
+          '                        map["total"] = internalStat.blockCountLong * intBlockSize' \
+          '                        map["free"] = internalStat.availableBlocksLong * intBlockSize' \
+          '                        val externalDirs = getExternalFilesDirs(null)' \
+          '                        var sdFound = false' \
+          '                        if (externalDirs.size > 1 && externalDirs[1] != null) {' \
+          '                            val sdFile = externalDirs[1]' \
+          '                            val isRemovable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {' \
+          '                                Environment.isExternalStorageRemovable(sdFile)' \
+          '                            } else { true }' \
+          '                            if (isRemovable) {' \
+          '                                try {' \
+          '                                    val sdStat = StatFs(sdFile.path)' \
+          '                                    val sdBlockSize = sdStat.blockSizeLong' \
+          '                                    map["sdTotal"] = sdStat.blockCountLong * sdBlockSize' \
+          '                                    map["sdFree"] = sdStat.availableBlocksLong * sdBlockSize' \
+          '                                    map["sdPath"] = sdFile.absolutePath' \
+          '                                    map["sdAvailable"] = true' \
+          '                                    sdFound = true' \
+          '                                } catch (e: Exception) {}' \
+          '                            }' \
+          '                        }' \
+          '                        if (!sdFound) {' \
+          '                            map["sdAvailable"] = false' \
+          '                            map["sdTotal"] = 0L' \
+          '                            map["sdFree"] = 0L' \
+          '                            map["sdPath"] = ""' \
+          '                        }' \
+          '                        result.success(map)' \
+          '                    } catch (e: Exception) {' \
+          '                        result.error("ERROR", e.message, null)' \
+          '                    }' \
+          '                }' \
+          '                "openFile" -> {' \
+          '                    try {' \
+          '                        val filePath = call.argument<String>("path") ?: ""' \
+          '                        val mimeType = call.argument<String>("mimeType") ?: "*/*"' \
+          '                        val file = File(filePath)' \
+          '                        if (!file.exists()) {' \
+          '                            result.error("NOT_FOUND", "File not found", null)' \
+          '                            return@setMethodCallHandler' \
+          '                        }' \
+          '                        val uri = FileProvider.getUriForFile(' \
+          '                            this,' \
+          '                            "${applicationContext.packageName}.fileProvider",' \
+          '                            file' \
+          '                        )' \
+          '                        val intent = Intent(Intent.ACTION_VIEW).apply {' \
+          '                            setDataAndType(uri, mimeType)' \
+          '                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)' \
+          '                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)' \
+          '                        }' \
+          '                        startActivity(intent)' \
+          '                        result.success(true)' \
+          '                    } catch (e: Exception) {' \
+          '                        result.error("ERROR", e.message, null)' \
+          '                    }' \
+          '                }' \
+          '                else -> { result.notImplemented() }' \
+          '            }' \
+          '        }' \
+          '    }' \
+          '}' > android/app/src/main/kotlin/com/dataplus/dataplus_app/MainActivity.kt
 
-  Future<void> _fetchSizes() async {
-    final client = HttpClient();
-    for (var item in downloads) {
-      if (item.sizeBytes == 0) {
-        try {
-          final req = await client.headUrl(Uri.parse(item.url));
-          final resp = await req.close();
-          item.sizeBytes = resp.contentLength > 0 ? resp.contentLength : 0;
-        } catch (_) {}
-      }
-    }
-    client.close();
-    notifyListeners();
-  }
+    - name: Install Dependencies & Patch Plugin SDK/Kotlin Versions
+      run: |
+        flutter clean
+        flutter pub cache clean -f
+        flutter pub get
 
-  void togglePauseResume(DownloadItem item) {
-    if (item.status == 'downloading') {
-      item.isPaused = true;
-      item.status = 'paused';
-      item.speed = 'Paused';
-      if (!downloads.any((d) => d.status == 'downloading' || d.status == 'queued')) {
-        _setKeepScreenOn(false);
-      }
-      notifyListeners();
-    } else if (item.status == 'paused' || item.status == 'error') {
-      item.isPaused = false;
-      item.status = 'queued';
-      item.speed = 'Resuming...';
-      activeTab.value = 'Queue';
-      notifyListeners();
-      if (!isDownloading) _startWorker();
-    }
-  }
+        find ~/.pub-cache -name "build.gradle" -exec sed -i "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '1.9.24'/g" {} + || true
+        find ~/.pub-cache -name "build.gradle" -exec sed -i 's/compileSdk 35/compileSdk 34/g' {} + || true
+        find ~/.pub-cache -name "build.gradle" -exec sed -i 's/compileSdk = 35/compileSdk = 34/g' {} + || true
+        find ~/.pub-cache -name "build.gradle" -exec sed -i 's/compileSdkVersion 35/compileSdkVersion 34/g' {} + || true
 
-  void _cleanupTempFiles(String folder, String name) {
-    try {
-      final tmp = File('$folder/$name.tmp');
-      if (tmp.existsSync()) tmp.deleteSync();
-      final merging = File('$folder/$name.merging');
-      if (merging.existsSync()) merging.deleteSync();
-      for (int i = 0; i < 16; i++) {
-        final part = File('$folder/$name.part$i');
-        if (part.existsSync()) part.deleteSync();
-      }
-    } catch (_) {}
-  }
+    - name: Generate App Launcher Icons
+      run: |
+        mkdir -p assets
+        if [ -f "icon.png" ]; then
+          cp icon.png assets/icon.png
+        fi
+        if [ -f "assets/icon.png" ]; then
+          dart run flutter_launcher_icons
+        fi
 
-  void deleteFinishedItems(List<DownloadItem> items, {required bool deleteActualFile}) {
-    for (var item in items) {
-      if (deleteActualFile) {
-        final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
-        final file = File('$folder/${item.name}');
-        if (file.existsSync()) {
-          try { file.deleteSync(); } catch (_) {}
-        }
-        final altFolder = (folder == internalDownloadPath)
-            ? '$sdDownloadPath/Download/.Dataplus'
-            : internalDownloadPath;
-        final altFile = File('$altFolder/${item.name}');
-        if (altFile.existsSync()) {
-          try { altFile.deleteSync(); } catch (_) {}
-        }
-        _cleanupTempFiles(folder, item.name);
-      }
-      downloads.remove(item);
-    }
-    updateStorageInfo();
-    notifyListeners();
-  }
+    - name: Ensure Persistent Release Keystore & Configure Signing
+      run: |
+        if [ ! -f "dataplus.jks" ]; then
+          echo "Generating new persistent release keystore..."
+          keytool -genkey -v -keystore dataplus.jks -alias dataplus -keyalg RSA -keysize 2048 -validity 10000 -storepass dataplus123 -keypass dataplus123 -dname "CN=DataPlus, OU=App, O=DataPlus, L=Yangon, C=MM"
+          
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add dataplus.jks
+          git commit -m "chore: persist release signing keystore [skip ci]" || true
+          git push || true
+        else
+          echo "Using existing persistent keystore from repository."
+        fi
+        
+        cp dataplus.jks android/app/dataplus.jks
 
-  void deleteItem(DownloadItem item) {
-    item.isCanceled = true;
-    item.isPaused = true;
-    final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
-    _cleanupTempFiles(folder, item.name);
-    downloads.remove(item);
-    updateStorageInfo();
-    notifyListeners();
-  }
+        if ! grep -q "signingConfigs.release" android/app/build.gradle; then
+          sed -i '/buildTypes {/i \    signingConfigs {\n        release {\n            storeFile file("dataplus.jks")\n            storePassword "dataplus123"\n            keyAlias "dataplus"\n            keyPassword "dataplus123"\n            v1SigningEnabled true\n            v2SigningEnabled true\n            v3SigningEnabled true\n        }\n    }' android/app/build.gradle
+          sed -i -E 's/signingConfig =? signingConfigs\.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
+        fi
 
-  void deleteSelected(List<DownloadItem> items) {
-    for (var it in items) {
-      it.isCanceled = true;
-      final folder = it.savePath.isNotEmpty ? it.savePath : currentActivePath;
-      _cleanupTempFiles(folder, it.name);
-      downloads.remove(it);
-    }
-    updateStorageInfo();
-    notifyListeners();
-  }
+    - name: Build APK (Release)
+      run: |
+        flutter build apk --release \
+          --target-platform android-arm,android-arm64 \
+          --build-name=1.0.${{ github.run_number }} \
+          --build-number=${{ github.run_number }} \
+          --dart-define=APP_VERSION=1.0.${{ github.run_number }}
 
-  void removeAll(String currentTab) {
-    final toRemove = downloads.where((d) =>
-      (currentTab == 'Finished' && d.status == 'finished') ||
-      (currentTab == 'Queue' && d.status != 'finished')
-    ).toList();
-    for (var it in toRemove) {
-      it.isCanceled = true;
-      final folder = it.savePath.isNotEmpty ? it.savePath : currentActivePath;
-      _cleanupTempFiles(folder, it.name);
-      downloads.remove(it);
-    }
-    updateStorageInfo();
-    notifyListeners();
-  }
-
-  Future<void> _startWorker() async {
-    isDownloading = true;
-    // 🌟 ဒေါင်းလုဒ်စတင်သည်နှင့် Native Android ထံသို့ Screen ဖွင့်ထားရန် အချက်ပြခြင်း
-    await _setKeepScreenOn(true);
-
-    try {
-      while (true) {
-        final queued = downloads.where((d) => d.status == 'queued').toList();
-        if (queued.isEmpty) break;
-
-        final item = queued.first;
-        item.status = 'downloading';
-        item.isPaused = false;
-        item.isCanceled = false;
-        if (item.savePath.isEmpty) item.savePath = currentActivePath;
-        notifyListeners();
-
-        try {
-          await _ensureDirectoryAndNoMedia(item.savePath);
-          await _downloadSmartEngine(item);
-          if (!item.isPaused && !item.isCanceled) {
-            item.status = 'finished';
-            item.progress = 1.0;
-            item.speed = 'COMPLETE ✅';
-            updateStorageInfo();
-          }
-        } catch (e) {
-          if (!item.isPaused && !item.isCanceled) {
-            item.status = 'error';
-            String errorMsg = e.toString().split('\n').first;
-            if (errorMsg.contains('Permission')) {
-              item.speed = "Storage Permission မရှိပါ!";
-            } else if (errorMsg.contains('SocketException') || errorMsg.contains('HttpException')) {
-              item.speed = "Network / Server ပြဿနာ";
-            } else {
-              item.speed = "Error: $errorMsg";
-            }
-          }
-        }
-        notifyListeners();
-      }
-    } finally {
-      isDownloading = false;
-      // 🌟 ဒေါင်းလုဒ်ပြီးဆုံးချိန် သို့မဟုတ် ရပ်နားချိန်တွင် Screen Lock ပြန်လွှတ်ပေးခြင်း
-      await _setKeepScreenOn(false);
-    }
-
-    if (!downloads.any((d) => d.status != 'finished')) {
-      activeTab.value = 'Finished';
-      onAllDownloadsFinished?.call();
-    }
-  }
-
-  Future<void> _downloadSmartEngine(DownloadItem item) async {
-    final client = HttpClient();
-    int totalBytes = item.sizeBytes;
-    bool canMultiThread = false;
-
-    try {
-      final probeReq = await client.headUrl(Uri.parse(item.url));
-      final probeResp = await probeReq.close();
-      if (probeResp.headers.value('accept-ranges') == 'bytes') {
-        canMultiThread = true;
-      }
-      if (totalBytes <= 0) {
-        totalBytes = probeResp.contentLength > 0 ? probeResp.contentLength : 0;
-      }
-    } catch (_) {}
-
-    if (totalBytes > 5 * 1024 * 1024 && !item.name.toLowerCase().endsWith('.apk')) {
-       canMultiThread = true;
-    }
-
-    if (!canMultiThread || totalBytes < 5 * 1024 * 1024 || item.name.toLowerCase().endsWith('.apk')) {
-      await _downloadSingleStream(item, client, totalBytes);
-    } else {
-      await _downloadMultiPartDirect(item, totalBytes);
-    }
-    client.close();
-  }
-
-  Future<void> _downloadMultiPartDirect(DownloadItem item, int totalBytes) async {
-    item.sizeBytes = totalBytes;
-    final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
-    final tempFile = File('$folder/${item.name}.tmp');
-    final finalFile = File('$folder/${item.name}');
-
-    if (tempFile.existsSync()) {
-      try { tempFile.deleteSync(); } catch (_) {}
-    }
-
-    final raf = await tempFile.open(mode: FileMode.write);
-    try { raf.truncateSync(totalBytes); } catch (_) {}
-
-    // 🌟 Thread 9 ခုဖြင့် ပြိုင်တူ ဆွဲမည်
-    const numThreads = 9;
-    final partSize = totalBytes ~/ numThreads;
-    final parts = List.generate(numThreads, (i) {
-      final s = i * partSize;
-      final e = (i == numThreads - 1) ? (totalBytes - 1) : (s + partSize - 1);
-      return {'idx': i, 'start': s, 'end': e};
-    });
-
-    List<int> bytesDownloaded = List.filled(numThreads, 0);
-    int lastDownloaded = 0;
-    int lastTime = DateTime.now().millisecondsSinceEpoch;
-
-    final timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      final currentBytes = bytesDownloaded.reduce((a, b) => a + b);
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final dt = (now - lastTime) / 1000.0;
-      if (dt > 0) {
-        final speedBytes = (currentBytes - lastDownloaded) / dt;
-        final speedMb = speedBytes / (1024 * 1024);
-        item.speed = "${speedMb.toStringAsFixed(1)} MB/s";
-        item.progress = (currentBytes / totalBytes).clamp(0.0, 0.99);
-
-        if (speedBytes > 0) {
-          final remSec = ((totalBytes - currentBytes) / speedBytes).round();
-          item.eta = "${remSec ~/ 60}:${(remSec % 60).toString().padLeft(2, '0')}";
-        }
-        lastDownloaded = currentBytes;
-        lastTime = now;
-        notifyListeners();
-      }
-    });
-
-    Future<void> downloadPart(Map p) async {
-      final pClient = HttpClient();
-      int writePos = p['start'];
-      try {
-        final req = await pClient.getUrl(Uri.parse(item.url));
-        req.headers.add(HttpHeaders.rangeHeader, 'bytes=${p['start']}-${p['end']}');
-        final resp = await req.close();
-
-        if (resp.statusCode != HttpStatus.partialContent && resp.statusCode != HttpStatus.ok) {
-          throw HttpException('Part ${p['idx']} failed: ${resp.statusCode}');
-        }
-
-        await for (var chunk in resp) {
-          if (item.isPaused || item.isCanceled) break;
-          raf.setPositionSync(writePos);
-          raf.writeFromSync(chunk);
-          writePos += chunk.length;
-          bytesDownloaded[p['idx']] += chunk.length;
-        }
-      } finally {
-        pClient.close();
-      }
-    }
-
-    try {
-      await Future.wait(parts.map((p) => downloadPart(p)));
-      await raf.flush();
-    } finally {
-      timer.cancel();
-      try { raf.closeSync(); } catch (_) {}
-    }
-
-    if (item.isCanceled || item.isPaused) {
-      if (item.isCanceled && tempFile.existsSync()) {
-        try { tempFile.deleteSync(); } catch (_) {}
-      }
-      return;
-    }
-
-    if (finalFile.existsSync()) {
-      try { finalFile.deleteSync(); } catch (_) {}
-    }
-    await tempFile.rename(finalFile.path);
-  }
-
-  Future<void> _downloadSingleStream(DownloadItem item, HttpClient client, int totalBytes) async {
-    final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
-    final tempFile = File('$folder/${item.name}.tmp');
-    final finalFile = File('$folder/${item.name}');
-
-    final req = await client.getUrl(Uri.parse(item.url));
-    final resp = await req.close();
-    if (resp.statusCode != HttpStatus.ok && resp.statusCode != HttpStatus.partialContent) {
-      throw HttpException('Failed: ${resp.statusCode}');
-    }
-
-    final totalLen = (totalBytes > 0) ? totalBytes : (resp.contentLength > 0 ? resp.contentLength : 0);
-    item.sizeBytes = totalLen;
-
-    final sink = tempFile.openWrite(mode: FileMode.write);
-    int downloaded = 0;
-    int lastDownloaded = 0;
-    int lastTime = DateTime.now().millisecondsSinceEpoch;
-
-    final timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final dt = (now - lastTime) / 1000.0;
-      if (dt > 0) {
-        final speedBytes = (downloaded - lastDownloaded) / dt;
-        final speedMb = speedBytes / (1024 * 1024);
-        item.speed = "${speedMb.toStringAsFixed(1)} MB/s";
-        if (totalLen > 0) {
-          item.progress = (downloaded / totalLen).clamp(0.0, 0.99);
-          if (speedBytes > 0) {
-            final remSec = ((totalLen - downloaded) / speedBytes).round();
-            item.eta = "${remSec ~/ 60}:${(remSec % 60).toString().padLeft(2, '0')}";
-          }
-        }
-        lastDownloaded = downloaded;
-        lastTime = now;
-        notifyListeners();
-      }
-    });
-
-    try {
-      await for (var chunk in resp) {
-        if (item.isPaused || item.isCanceled) break;
-        sink.add(chunk);
-        downloaded += chunk.length;
-      }
-      await sink.flush();
-    } finally {
-      timer.cancel();
-      await sink.close();
-    }
-
-    if (item.isCanceled || item.isPaused) return;
-
-    if (finalFile.existsSync()) finalFile.deleteSync();
-    await tempFile.rename(finalFile.path);
-  }
-}
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DATAPLUS_v1.0.${{ github.run_number }}
+        path: build/app/outputs/flutter-apk/app-release.apk
