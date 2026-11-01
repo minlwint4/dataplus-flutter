@@ -95,7 +95,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     });
   }
 
-  // 🔊 VideoPlayer Engine ဖြင့် ဖုန်းစပီကာမှ ကျသင့်ငွေ အသံဖိုင်များ ဖွင့်ခြင်း
   Future<void> _playPhoneVoiceSequence(String serverUrl, int totalPrice) async {
     try {
       final List<String> targetServers = [
@@ -169,7 +168,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     } catch (_) {}
   }
 
-  // 🖨️ ဆာဗာသို့ Print Job လှမ်းပို့မည့် Function
   Future<void> _sendPrintJob(BuildContext ctx, String serverUrl, String customer, int mc, int sc) async {
     final List<String> targetServers = [
       serverUrl,
@@ -942,7 +940,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  // 🌟 ပြင်ပ Player (MX Player / VLC / System) ဖြင့် ဖွင့်ရန် Function
   static Future<void> openInExternalPlayer(BuildContext context, File file) async {
     final bool isApk = file.path.toLowerCase().endsWith('.apk');
     final mimeType = isApk ? 'application/vnd.android.package-archive' : 'video/*';
@@ -961,8 +958,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
   }
 
-  // 🌟 ဗီဒီယိုဖိုင်ဖြစ်ပါက DATA PLUS Built-in MX Style Player ဖြင့် ချက်ချင်း တန်းဖွင့်ပေးမည်
+  // 🌟 Finished ထဲမှ ဗီဒီယိုများကို Playlist အနေဖြင့် ပေးပို့၍ Built-in Player ဖြင့် ဖွင့်ခြင်း
   Future<void> _openDownloadedFile(DownloadItem item) async {
+    final finishedList = engine.downloads.where((d) => d.status == 'finished' && !d.name.toLowerCase().endsWith('.apk')).toList();
+    final int index = finishedList.indexWhere((d) => d.name == item.name);
+
     final folder = item.savePath.isNotEmpty ? item.savePath : engine.currentActivePath;
     var file = File('$folder/${item.name}');
 
@@ -982,18 +982,37 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     }
 
     final bool isApk = item.name.toLowerCase().endsWith('.apk');
-
     if (isApk) {
       await openInExternalPlayer(context, file);
       return;
     }
 
+    // ဆောက်လုပ်ထားသော playlist ဖိုင်များ စာရင်းကို File objects အဖြစ် ပြောင်းလဲခြင်း
+    List<File> playlistFiles = [];
+    for (var d in finishedList) {
+      final fFolder = d.savePath.isNotEmpty ? d.savePath : engine.currentActivePath;
+      var fFile = File('$fFolder/${d.name}');
+      if (!fFile.existsSync()) {
+        final altFolder = (fFolder == DownloadEngine.internalDownloadPath)
+            ? '${engine.sdDownloadPath}/Download/.Dataplus'
+            : DownloadEngine.internalDownloadPath;
+        final altFile = File('$altFolder/${d.name}');
+        if (altFile.existsSync()) fFile = altFile;
+      }
+      if (fFile.existsSync()) {
+        playlistFiles.add(fFile);
+      }
+    }
+
+    int targetIndex = playlistFiles.indexWhere((f) => f.path == file.path);
+    if (targetIndex == -1) targetIndex = 0;
+
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => DataPlusVideoPlayerScreen(
-          file: file,
-          title: item.name,
+          playlist: playlistFiles,
+          initialIndex: targetIndex,
         ),
       ),
     );
@@ -1482,16 +1501,16 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
 }
 
 // ============================================================================
-// 🎬 DATA PLUS BUILT-IN MX PLAYER STYLE VIDEO PLAYER
+// 🎬 DATA PLUS BUILT-IN MX PLAYER STYLE VIDEO PLAYER (WITH PLAYLIST PREV/NEXT)
 // ============================================================================
 class DataPlusVideoPlayerScreen extends StatefulWidget {
-  final File file;
-  final String title;
+  final List<File> playlist;
+  final int initialIndex;
 
   const DataPlusVideoPlayerScreen({
     super.key,
-    required this.file,
-    required this.title,
+    required this.playlist,
+    required this.initialIndex,
   });
 
   static final Map<String, Duration> _savedPositions = {};
@@ -1501,7 +1520,8 @@ class DataPlusVideoPlayerScreen extends StatefulWidget {
 }
 
 class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
-  late VideoPlayerController _controller;
+  late int _currentIndex;
+  VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _hasError = false;
   String _errorText = '';
@@ -1511,11 +1531,9 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
   bool _isLandscape = true;
   Timer? _hideTimer;
 
-  // Aspect Ratio Modes: 0 = Fit, 1 = Stretch (Fill), 2 = Zoom (Cover)
-  int _aspectMode = 0;
+  int _aspectMode = 0; // 0 = Fit, 1 = Stretch, 2 = Zoom
   double _playbackSpeed = 1.0;
 
-  // Gesture states
   double _volume = 1.0;
   double _brightness = 1.0;
   String? _centerHudText;
@@ -1527,9 +1545,10 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     _enterFullscreenLandscape();
     _setKeepScreenOn(true);
-    _initVideo();
+    _loadCurrentVideo();
   }
 
   Future<void> _setKeepScreenOn(bool enable) async {
@@ -1564,18 +1583,28 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
     _startHideTimer();
   }
 
-  Future<void> _initVideo() async {
-    _controller = VideoPlayerController.file(widget.file);
+  Future<void> _loadCurrentVideo() async {
+    setState(() {
+      _isInitialized = false;
+      _hasError = false;
+    });
+
+    await _controller?.dispose();
+
+    final file = widget.playlist[_currentIndex];
+    _controller = VideoPlayerController.file(file);
+
     try {
-      await _controller.initialize();
-      final savedPos = DataPlusVideoPlayerScreen._savedPositions[widget.file.path];
-      if (savedPos != null && savedPos < _controller.value.duration - const Duration(seconds: 5)) {
-        await _controller.seekTo(savedPos);
+      await _controller!.initialize();
+      final savedPos = DataPlusVideoPlayerScreen._savedPositions[file.path];
+      if (savedPos != null && savedPos < _controller!.value.duration - const Duration(seconds: 5)) {
+        await _controller!.seekTo(savedPos);
         _showHud(Icons.restore, "ကြည့်လက်စမှ ပြန်ဖွင့်သည် (${_formatDuration(savedPos)})");
       }
-      await _controller.setVolume(_volume);
-      await _controller.play();
-      _controller.addListener(_onControllerUpdate);
+      await _controller!.setVolume(_volume);
+      await _controller!.setPlaybackSpeed(_playbackSpeed);
+      await _controller!.play();
+      _controller!.addListener(_onControllerUpdate);
 
       if (mounted) {
         setState(() {
@@ -1593,10 +1622,35 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
     }
   }
 
+  void _playPrevious() {
+    if (_currentIndex > 0) {
+      _currentIndex--;
+      _loadCurrentVideo();
+    } else {
+      _showHud(Icons.skip_previous, "ပထမဆုံး ဇာတ်ကား ဖြစ်ပါသည်");
+    }
+  }
+
+  void _playNext() {
+    if (_currentIndex < widget.playlist.length - 1) {
+      _currentIndex++;
+      _loadCurrentVideo();
+    } else {
+      _showHud(Icons.skip_next, "နောက်ဆုံး ဇာတ်ကား ဖြစ်ပါသည်");
+    }
+  }
+
   void _onControllerUpdate() {
     if (!mounted) return;
-    if (_controller.value.isInitialized) {
-      DataPlusVideoPlayerScreen._savedPositions[widget.file.path] = _controller.value.position;
+    if (_controller != null && _controller!.value.isInitialized) {
+      DataPlusVideoPlayerScreen._savedPositions[widget.playlist[_currentIndex].path] = _controller!.value.position;
+      
+      // ဗီဒီယို ပြီးဆုံးသွားပါက နောက်တစ်ကားသို့ အလိုအလျောက် ကူးပြောင်းပေးခြင်း
+      if (_controller!.value.position >= _controller!.value.duration && !_controller!.value.isPlaying) {
+        if (_currentIndex < widget.playlist.length - 1) {
+          _playNext();
+        }
+      }
     }
     setState(() {});
   }
@@ -1604,7 +1658,7 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
   void _startHideTimer() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && _controller.value.isPlaying) {
+      if (mounted && _controller != null && _controller!.value.isPlaying) {
         setState(() {
           _showControls = false;
         });
@@ -1638,13 +1692,13 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
   }
 
   void _seekRelative(Duration offset) {
-    if (!_isInitialized) return;
-    final current = _controller.value.position;
-    final total = _controller.value.duration;
+    if (!_isInitialized || _controller == null) return;
+    final current = _controller!.value.position;
+    final total = _controller!.value.duration;
     var target = current + offset;
     if (target < Duration.zero) target = Duration.zero;
     if (target > total) target = total;
-    _controller.seekTo(target);
+    _controller!.seekTo(target);
     _showHud(
       offset.isNegative ? Icons.replay_10_rounded : Icons.forward_10_rounded,
       "${offset.isNegative ? '-10s' : '+10s'} (${_formatDuration(target)})",
@@ -1665,7 +1719,7 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
     final speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
     final nextIdx = (speeds.indexOf(_playbackSpeed) + 1) % speeds.length;
     _playbackSpeed = speeds[nextIdx];
-    _controller.setPlaybackSpeed(_playbackSpeed);
+    _controller?.setPlaybackSpeed(_playbackSpeed);
     _showHud(Icons.speed_rounded, "အမြန်နှုန်း ${_playbackSpeed}x");
     _startHideTimer();
   }
@@ -1684,48 +1738,46 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
   void dispose() {
     _hideTimer?.cancel();
     _hudTimer?.cancel();
-    _controller.removeListener(_onControllerUpdate);
-    _controller.dispose();
+    _controller?.removeListener(_onControllerUpdate);
+    _controller?.dispose();
     _setKeepScreenOn(false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
   Widget _buildVideoSurface() {
-    final videoWidth = _controller.value.size.width;
-    final videoHeight = _controller.value.size.height;
+    if (_controller == null) return Container();
+    final videoWidth = _controller!.value.size.width;
+    final videoHeight = _controller!.value.size.height;
 
     if (_aspectMode == 1) {
-      // Stretch to fill entire screen
       return SizedBox.expand(
         child: FittedBox(
           fit: BoxFit.fill,
           child: SizedBox(
             width: videoWidth,
             height: videoHeight,
-            child: VideoPlayer(_controller),
+            child: VideoPlayer(_controller!),
           ),
         ),
       );
     } else if (_aspectMode == 2) {
-      // Zoom / Cover
       return SizedBox.expand(
         child: FittedBox(
           fit: BoxFit.cover,
           child: SizedBox(
             width: videoWidth,
             height: videoHeight,
-            child: VideoPlayer(_controller),
+            child: VideoPlayer(_controller!),
           ),
         ),
       );
     }
 
-    // Default Fit
     return Center(
       child: AspectRatio(
-        aspectRatio: _controller.value.aspectRatio,
-        child: VideoPlayer(_controller),
+        aspectRatio: _controller!.value.aspectRatio,
+        child: VideoPlayer(_controller!),
       ),
     );
   }
@@ -1733,14 +1785,15 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final currentFile = widget.playlist[_currentIndex];
+    final title = currentFile.path.split('/').last;
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Video Layer
-          if (_isInitialized)
+          if (_isInitialized && _controller != null)
             _buildVideoSurface()
           else if (_hasError)
             Center(
@@ -1768,7 +1821,7 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F6FEB)),
                       onPressed: () {
-                        _DownloaderScreenState.openInExternalPlayer(context, widget.file);
+                        _DownloaderScreenState.openInExternalPlayer(context, currentFile);
                       },
                       icon: const Icon(Icons.open_in_new, color: Colors.white),
                       label: const Text("MX / ပြင်ပ Player ဖြင့် ဖွင့်မည်", style: TextStyle(color: Colors.white)),
@@ -1782,7 +1835,6 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
               child: CircularProgressIndicator(color: Color(0xFF00E676)),
             ),
 
-          // 2. Brightness Dimming Overlay (MX Style)
           if (_brightness < 1.0)
             IgnorePointer(
               child: Container(
@@ -1790,24 +1842,23 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
               ),
             ),
 
-          // 3. MX Player Touch Gesture Layer
           if (_isInitialized)
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _toggleControls,
               onDoubleTapDown: (details) {
-                if (_isLocked) return;
+                if (_isLocked || _controller == null) return;
                 final dx = details.localPosition.dx;
                 if (dx < size.width * 0.4) {
                   _seekRelative(const Duration(seconds: -10));
                 } else if (dx > size.width * 0.6) {
                   _seekRelative(const Duration(seconds: 10));
                 } else {
-                  if (_controller.value.isPlaying) {
-                    _controller.pause();
+                  if (_controller!.value.isPlaying) {
+                    _controller!.pause();
                     _showHud(Icons.pause_rounded, "ခေတ္တရပ်ထားသည်");
                   } else {
-                    _controller.play();
+                    _controller!.play();
                     _showHud(Icons.play_arrow_rounded, "ဆက်ဖွင့်နေသည်");
                   }
                 }
@@ -1821,7 +1872,7 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                   _showHud(Icons.brightness_6_rounded, "အလင်းအမှောင်: ${(_brightness * 100).round()}%");
                 } else {
                   _volume = (_volume + delta).clamp(0.0, 1.0);
-                  _controller.setVolume(_volume);
+                  _controller?.setVolume(_volume);
                   _showHud(
                     _volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded,
                     "အသံ: ${(_volume * 100).round()}%",
@@ -1829,31 +1880,30 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                 }
               },
               onHorizontalDragStart: (_) {
-                if (_isLocked) return;
-                _dragSeekTarget = _controller.value.position;
+                if (_isLocked || _controller == null) return;
+                _dragSeekTarget = _controller!.value.position;
               },
               onHorizontalDragUpdate: (details) {
-                if (_isLocked || _dragSeekTarget == null) return;
-                final totalSec = _controller.value.duration.inSeconds;
+                if (_isLocked || _dragSeekTarget == null || _controller == null) return;
+                final totalSec = _controller!.value.duration.inSeconds;
                 final seekDeltaSec = (details.primaryDelta! / size.width) * (totalSec > 600 ? 180 : 90);
                 final nextMillis = (_dragSeekTarget!.inMilliseconds + (seekDeltaSec * 1000).round())
-                    .clamp(0, _controller.value.duration.inMilliseconds);
+                    .clamp(0, _controller!.value.duration.inMilliseconds);
                 _dragSeekTarget = Duration(milliseconds: nextMillis);
                 _showHud(
                   Icons.fast_forward_rounded,
-                  "${_formatDuration(_dragSeekTarget!)} / ${_formatDuration(_controller.value.duration)}",
+                  "${_formatDuration(_dragSeekTarget!)} / ${_formatDuration(_controller!.value.duration)}",
                 );
               },
               onHorizontalDragEnd: (_) {
-                if (_isLocked || _dragSeekTarget == null) return;
-                _controller.seekTo(_dragSeekTarget!);
+                if (_isLocked || _dragSeekTarget == null || _controller == null) return;
+                _controller!.seekTo(_dragSeekTarget!);
                 _dragSeekTarget = null;
                 _startHideTimer();
               },
               child: const SizedBox.expand(),
             ),
 
-          // 4. Center HUD Indicator (Volume / Brightness / Seek)
           if (_centerHudText != null)
             Center(
               child: IgnorePointer(
@@ -1884,7 +1934,6 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
               ),
             ),
 
-          // 5. Locked Mode Floating Unlock Button
           if (_isLocked && _showControls)
             Positioned(
               left: 24,
@@ -1909,9 +1958,7 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
               ),
             ),
 
-          // 6. Full MX Player Top & Bottom Controls
-          if (!_isLocked && _showControls && _isInitialized) ...[
-            // Top Bar
+          if (!_isLocked && _showControls && _isInitialized && _controller != null) ...[
             Positioned(
               top: 0,
               left: 0,
@@ -1936,7 +1983,7 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          widget.title,
+                          title,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 14.5,
@@ -1965,8 +2012,8 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         ),
                         onPressed: () {
-                          _controller.pause();
-                          _DownloaderScreenState.openInExternalPlayer(context, widget.file);
+                          _controller?.pause();
+                          _DownloaderScreenState.openInExternalPlayer(context, currentFile);
                         },
                         icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF58A6FF), size: 15),
                         label: const Text(
@@ -1980,7 +2027,6 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
               ),
             ),
 
-            // Bottom Control Bar
             Positioned(
               bottom: 0,
               left: 0,
@@ -1999,11 +2045,10 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Progress Slider Row
                       Row(
                         children: [
                           Text(
-                            _formatDuration(_controller.value.position),
+                            _formatDuration(_controller!.value.position),
                             style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                           ),
                           Expanded(
@@ -2016,26 +2061,25 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                                 thumbColor: const Color(0xFF00E676),
                               ),
                               child: Slider(
-                                value: _controller.value.position.inMilliseconds
+                                value: _controller!.value.position.inMilliseconds
                                     .toDouble()
-                                    .clamp(0.0, _controller.value.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity)),
+                                    .clamp(0.0, _controller!.value.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity)),
                                 min: 0.0,
-                                max: _controller.value.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity),
+                                max: _controller!.value.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity),
                                 onChanged: (val) {
-                                  _controller.seekTo(Duration(milliseconds: val.round()));
+                                  _controller!.seekTo(Duration(milliseconds: val.round()));
                                   _startHideTimer();
                                 },
                               ),
                             ),
                           ),
                           Text(
-                            _formatDuration(_controller.value.duration),
+                            _formatDuration(_controller!.value.duration),
                             style: const TextStyle(color: Colors.white70, fontSize: 12),
                           ),
                         ],
                       ),
 
-                      // MX Style Action Buttons Row
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -2051,17 +2095,28 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                           ),
                           Row(
                             children: [
+                              // 🌟 Previous Video Button
+                              IconButton(
+                                onPressed: _currentIndex > 0 ? _playPrevious : null,
+                                icon: Icon(
+                                  Icons.skip_previous_rounded,
+                                  color: _currentIndex > 0 ? Colors.white : Colors.white24,
+                                  size: 28,
+                                ),
+                                tooltip: "ရှေ့တစ်ကား",
+                              ),
+                              const SizedBox(width: 8),
                               IconButton(
                                 onPressed: () => _seekRelative(const Duration(seconds: -10)),
-                                icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 30),
+                                icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 26),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               InkWell(
                                 onTap: () {
-                                  if (_controller.value.isPlaying) {
-                                    _controller.pause();
+                                  if (_controller!.value.isPlaying) {
+                                    _controller!.pause();
                                   } else {
-                                    _controller.play();
+                                    _controller!.play();
                                   }
                                   _startHideTimer();
                                 },
@@ -2073,16 +2128,27 @@ class _DataPlusVideoPlayerScreenState extends State<DataPlusVideoPlayerScreen> {
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
-                                    _controller.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                    _controller!.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                                     color: Colors.black,
-                                    size: 30,
+                                    size: 28,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               IconButton(
                                 onPressed: () => _seekRelative(const Duration(seconds: 10)),
-                                icon: const Icon(Icons.forward_10_rounded, color: Colors.white, size: 30),
+                                icon: const Icon(Icons.forward_10_rounded, color: Colors.white, size: 26),
+                              ),
+                              const SizedBox(width: 8),
+                              // 🌟 Next Video Button
+                              IconButton(
+                                onPressed: _currentIndex < widget.playlist.length - 1 ? _playNext : null,
+                                icon: Icon(
+                                  Icons.skip_next_rounded,
+                                  color: _currentIndex < widget.playlist.length - 1 ? Colors.white : Colors.white24,
+                                  size: 28,
+                                ),
+                                tooltip: "နောက်တစ်ကား",
                               ),
                             ],
                           ),
