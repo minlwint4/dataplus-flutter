@@ -70,6 +70,24 @@ class DownloadEngine extends ChangeNotifier {
     } catch (_) {}
   }
 
+  // 🌟 Background ရောက်သွားချိန် ဒေါင်းလုဒ်မရပ်စေရန် Foreground Service ဖွင့်/ပိတ်ခြင်း
+  Future<void> _startBackgroundService({String? title, String? desc}) async {
+    try {
+      const channel = MethodChannel('com.dataplus/storage');
+      await channel.invokeMethod('startDownloadService', {
+        'title': title ?? 'DATA PLUS Downloader',
+        'desc': desc ?? 'ဖိုင်များ ဒေါင်းလုဒ်ဆွဲနေပါသည်...',
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _stopBackgroundService() async {
+    try {
+      const channel = MethodChannel('com.dataplus/storage');
+      await channel.invokeMethod('stopDownloadService');
+    } catch (_) {}
+  }
+
   Future<void> _ensureDirectoryAndNoMedia(String path) async {
     final dir = Directory(path);
     if (!await dir.exists()) {
@@ -84,7 +102,7 @@ class DownloadEngine extends ChangeNotifier {
   Future<void> updateStorageInfo() async {
     try {
       const channel = MethodChannel('com.dataplus/storage');
-      final res = await channel.invokeMethod<Map>('getStorageSpace');
+      final res = await channel.invokeMethod('getStorageSpace');
       if (res != null) {
         totalStorageBytes = res['total'] ?? 0;
         freeStorageBytes = res['free'] ?? 0;
@@ -228,6 +246,7 @@ class DownloadEngine extends ChangeNotifier {
       }
     }
     _setKeepScreenOn(false);
+    _stopBackgroundService();
     notifyListeners();
   }
 
@@ -253,6 +272,7 @@ class DownloadEngine extends ChangeNotifier {
       item.speed = 'Paused';
       if (!downloads.any((d) => d.status == 'downloading' || d.status == 'queued')) {
         _setKeepScreenOn(false);
+        _stopBackgroundService();
       }
       notifyListeners();
     } else if (item.status == 'paused' || item.status == 'error') {
@@ -307,6 +327,9 @@ class DownloadEngine extends ChangeNotifier {
     final folder = item.savePath.isNotEmpty ? item.savePath : currentActivePath;
     _cleanupTempFiles(folder, item.name);
     downloads.remove(item);
+    if (!downloads.any((d) => d.status == 'downloading' || d.status == 'queued')) {
+      _stopBackgroundService();
+    }
     updateStorageInfo();
     notifyListeners();
   }
@@ -317,6 +340,9 @@ class DownloadEngine extends ChangeNotifier {
       final folder = it.savePath.isNotEmpty ? it.savePath : currentActivePath;
       _cleanupTempFiles(folder, it.name);
       downloads.remove(it);
+    }
+    if (!downloads.any((d) => d.status == 'downloading' || d.status == 'queued')) {
+      _stopBackgroundService();
     }
     updateStorageInfo();
     notifyListeners();
@@ -333,14 +359,17 @@ class DownloadEngine extends ChangeNotifier {
       _cleanupTempFiles(folder, it.name);
       downloads.remove(it);
     }
+    if (!downloads.any((d) => d.status == 'downloading' || d.status == 'queued')) {
+      _stopBackgroundService();
+    }
     updateStorageInfo();
     notifyListeners();
   }
 
   Future<void> _startWorker() async {
     isDownloading = true;
-    // 🌟 ဒေါင်းလုဒ်စတင်သည်နှင့် Native Android ထံသို့ Screen ဖွင့်ထားရန် အချက်ပြခြင်း
     await _setKeepScreenOn(true);
+    await _startBackgroundService();
 
     try {
       while (true) {
@@ -352,6 +381,12 @@ class DownloadEngine extends ChangeNotifier {
         item.isPaused = false;
         item.isCanceled = false;
         if (item.savePath.isEmpty) item.savePath = currentActivePath;
+
+        _startBackgroundService(
+          title: item.name,
+          desc: 'ဒေါင်းလုဒ်ဆွဲနေသည် (${queued.length} ဖိုင်ကျန်)...',
+        );
+
         notifyListeners();
 
         try {
@@ -380,8 +415,8 @@ class DownloadEngine extends ChangeNotifier {
       }
     } finally {
       isDownloading = false;
-      // 🌟 ဒေါင်းလုဒ်ပြီးဆုံးချိန် သို့မဟုတ် ရပ်နားချိန်တွင် Screen Lock ပြန်လွှတ်ပေးခြင်း
       await _setKeepScreenOn(false);
+      await _stopBackgroundService();
     }
 
     if (!downloads.any((d) => d.status != 'finished')) {
